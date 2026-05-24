@@ -33,3 +33,23 @@ yarn-error.log*
 # typescript
 *.tsbuildinfo
 next-env.d.ts
+
+# husky internal directory (the hooks themselves are committed)
+.husky/_
+
+# editor / OS
+.idea/
+.vscode/
+*.swp
+Thumbs.db
+
+# logs
+*.log
+
+# jest
+/coverage
+junit.xml
+
+# Claude Code local settings (machine-specific)
+.claude/
+

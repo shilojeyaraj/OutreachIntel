@@ -1,0 +1,7 @@
+# Default reviewer for every change in the repo.
+# Add more lines below to give different paths different owners.
+*               @shilojeyaraj
+
+# Examples:
+# /app/api/     @shilojeyaraj @some-teammate
+# /docs/        @docs-team

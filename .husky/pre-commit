@@ -1,0 +1,3 @@
+#!/usr/bin/env sh
+# Run lint-staged so only files in the commit get checked.
+npx lint-staged

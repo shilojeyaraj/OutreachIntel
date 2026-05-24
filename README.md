@@ -1,8 +1,15 @@
 # ColdReach Intel
 
+[![CI](https://github.com/shilojeyaraj/OutreachIntel/actions/workflows/ci.yml/badge.svg)](https://github.com/shilojeyaraj/OutreachIntel/actions/workflows/ci.yml)
+[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](./LICENSE)
+[![Node](https://img.shields.io/badge/node-%3E%3D20-339933?logo=node.js&logoColor=white)](https://nodejs.org)
+[![Next.js](https://img.shields.io/badge/Next.js-14-black?logo=next.js)](https://nextjs.org)
+[![Code style: Prettier](https://img.shields.io/badge/code_style-prettier-ff69b4.svg)](https://prettier.io)
+
 AI-ranked LinkedIn outreach targets for student internship referrals, advice, or coffee chats.
 
 Two integrations make the output non-generic:
+
 - **Apify Google Search Scraper** runs one `site:linkedin.com/in` query per target company and feeds the real hits to the LLM, so it picks actual people instead of inventing names.
 - **OpenRouter** acts as the model gateway, defaulting to `openai/gpt-4o` (swap via `OPENROUTER_MODEL`).
 
@@ -27,13 +34,13 @@ Open http://localhost:3000.
 
 ## Environment variables
 
-| Var | Required | Default | Notes |
-|---|---|---|---|
-| `OPENROUTER_API_KEY` | yes | — | Get one at https://openrouter.ai/keys |
-| `OPENROUTER_MODEL` | no | `openai/gpt-4o` | Try `openai/gpt-4-turbo` or `openai/gpt-4` |
-| `OPENROUTER_SITE_URL` | no | — | Sent as `HTTP-Referer` for OpenRouter attribution |
-| `OPENROUTER_SITE_NAME` | no | — | Sent as `X-Title` for OpenRouter attribution |
-| `APIFY_API_TOKEN` | recommended | — | Without it the app still works but the model invents names. Get one at https://console.apify.com/account/integrations |
+| Var                    | Required    | Default         | Notes                                                                                                                 |
+| ---------------------- | ----------- | --------------- | --------------------------------------------------------------------------------------------------------------------- |
+| `OPENROUTER_API_KEY`   | yes         | —               | Get one at https://openrouter.ai/keys                                                                                 |
+| `OPENROUTER_MODEL`     | no          | `openai/gpt-4o` | Try `openai/gpt-4-turbo` or `openai/gpt-4`                                                                            |
+| `OPENROUTER_SITE_URL`  | no          | —               | Sent as `HTTP-Referer` for OpenRouter attribution                                                                     |
+| `OPENROUTER_SITE_NAME` | no          | —               | Sent as `X-Title` for OpenRouter attribution                                                                          |
+| `APIFY_API_TOKEN`      | recommended | —               | Without it the app still works but the model invents names. Get one at https://console.apify.com/account/integrations |
 
 ## How it works
 
@@ -54,3 +61,19 @@ vercel --prod
 ```
 
 The `/api/outreach` route runs as a serverless function — no extra config required.
+
+## Development
+
+```bash
+make install        # install dependencies
+make test           # run unit + integration tests
+make test-coverage  # run tests with coverage report
+make lint           # ESLint
+make format         # Prettier --write
+```
+
+See [`CONTRIBUTING.md`](./CONTRIBUTING.md) for the PR process and Conventional Commits format, and [`docs/ARCHITECTURE.md`](./docs/ARCHITECTURE.md) for a system overview.
+
+## License
+
+[MIT](./LICENSE) © Shilo Jeyaraj

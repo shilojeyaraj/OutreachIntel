@@ -1,0 +1,77 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+# Cancel in-flight CI runs on the same PR/branch when a new commit lands.
+concurrency:
+  group: ci-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  quality:
+    name: Lint, typecheck & test
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Lint
+        run: npm run lint
+
+      - name: Typecheck
+        run: npm run typecheck
+
+      - name: Test with coverage
+        run: npm run test:coverage -- --ci --reporters=default --reporters=github-actions
+
+      # Renders a coverage table directly in the PR summary tab.
+      - name: Coverage summary
+        if: always()
+        run: |
+          if [ -f coverage/coverage-summary.json ]; then
+            echo "## Coverage" >> $GITHUB_STEP_SUMMARY
+            node -e "const c=require('./coverage/coverage-summary.json').total;Object.entries(c).forEach(([k,v])=>console.log(\`- **\${k}**: \${v.pct}%\`))" >> $GITHUB_STEP_SUMMARY
+          fi
+
+      - name: Upload coverage artifact
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: coverage-report
+          path: coverage/
+          retention-days: 7
+
+  build:
+    name: Production build
+    runs-on: ubuntu-latest
+    needs: quality
+
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Next.js build
+        # Stub env vars so the build does not fail on missing secrets.
+        env:
+          OPENROUTER_API_KEY: ci-stub-key
+        run: npm run build
