@@ -1,5 +1,6 @@
 'use client';
 
+import Link from 'next/link';
 import { useState } from 'react';
 import { CompanyChips } from '@/components/CompanyChips';
 import { StrategyBanner } from '@/components/StrategyBanner';
@@ -128,7 +129,12 @@ export default function Page() {
               AI-ranked LinkedIn outreach targets for student internship hunts
             </p>
           </div>
-          <div className="text-xs text-slate-500">OpenRouter · GPT-4 · Apify Live Search</div>
+          <div className="flex items-center gap-4 text-xs text-slate-500">
+            <Link href="/jobs" className="font-semibold text-accent-hover hover:text-white">
+              Job Finder →
+            </Link>
+            <span>OpenRouter · GPT-4 · Apify Live Search</span>
+          </div>
         </div>
       </header>
 
@@ -252,7 +258,8 @@ export default function Page() {
           {loading && (
             <div className="space-y-3">
               <div className="rounded-lg border border-accent/30 bg-accent/5 px-4 py-2 text-xs text-accent-hover">
-                Running live LinkedIn search via Apify and ranking with GPT-4… this can take up to a minute.
+                Running live LinkedIn search via Apify and ranking with GPT-4… this can take up to a
+                minute.
               </div>
               <LoadingSkeleton />
             </div>

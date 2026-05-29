@@ -36,3 +36,67 @@ export interface OutreachResponse {
 export interface ApiError {
   error: string;
 }
+
+// --- Job Finder (/jobs) ---
+
+export type JobSource = 'LinkedIn';
+export type FitLabel = 'Excellent' | 'Strong' | 'Moderate' | 'Weak';
+export type PostedWithin = '24h' | '7d' | '30d';
+
+export interface RawLinkedInJob {
+  title?: string;
+  company?: string;
+  location?: string;
+  publishedAt?: string;
+  jobUrl?: string;
+  description?: string;
+  employmentType?: string;
+  seniorityLevel?: string;
+}
+
+export interface Job {
+  id: string;
+  title: string;
+  company: string;
+  location: string;
+  postedAt: string;
+  source: JobSource;
+  applyUrl: string;
+  description: string;
+}
+
+export interface RankingResult {
+  index: number;
+  fitScore: number;
+  fitLabel: FitLabel;
+  rationale: string;
+  strengths: string[];
+  gaps: string[];
+  seniorityNote: string;
+}
+
+export type ScoredJob = Job & Omit<RankingResult, 'index'>;
+
+export interface JobSearchInput {
+  roles: string[];
+  locations: string[];
+  cvSummary: string;
+  postedWithin?: PostedWithin;
+  minFitScore?: number;
+  apifyKey?: string;
+  anthropicKey?: string;
+}
+
+export interface JobSearchResponse {
+  jobs: ScoredJob[];
+  total: number;
+  returned: number;
+  rankingFailed?: boolean;
+  warning?: string;
+}
+
+export const POSTED_WITHIN_TO_TPR: Record<PostedWithin, string> = {
+  '24h': 'r86400',
+  '7d': 'r604800',
+  '30d': 'r2592000',
+};
