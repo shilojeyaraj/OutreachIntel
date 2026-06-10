@@ -42,6 +42,23 @@ Open http://localhost:3000.
 | `OPENROUTER_SITE_NAME` | no          | —               | Sent as `X-Title` for OpenRouter attribution                                                                          |
 | `APIFY_API_TOKEN`      | recommended | —               | Without it the app still works but the model invents names. Get one at https://console.apify.com/account/integrations |
 
+## Features
+
+### Job Finder (`/jobs`)
+
+Paste a job posting URL and your CV text — the app fetches the posting, scores it against your background using Claude, and returns a ranked fit summary with suggested talking points.
+
+Requires `ANTHROPIC_API_KEY` (set in `.env.local`).
+
+### Resume + Cover Letter Tailor (`/tailor`)
+
+Paste a target job (title, company, description) and your resume's LaTeX source — the agent tailors the resume to the role and writes a matching cover letter.
+
+- **Resume output:** tailored LaTeX you copy directly into your editor (e.g. Overleaf). There is no server-side LaTeX compilation.
+- **Cover letter output:** a downloadable PDF generated in the browser from the drafted text.
+- **QA fact-check:** a built-in pass compares both drafts against your original resume (the source of truth), auto-revises once, and flags anything it could not resolve. The system never invents employers, titles, dates, metrics, or skills not present in your resume.
+- Requires `ANTHROPIC_API_KEY` (same key as `/jobs`; set in `.env.local` or paste directly into the form).
+
 ## How it works
 
 1. The browser POSTs the form payload to `/api/outreach`.
