@@ -10,7 +10,8 @@ export interface TailorInput {
   job: TailorJob;
   resumeLatex: string;
   tone?: Tone;
-  anthropicKey?: string;
+  /** Optional OpenRouter API key; falls back to OPENROUTER_API_KEY on the server. */
+  openrouterKey?: string;
 }
 
 export interface ResumeChange {

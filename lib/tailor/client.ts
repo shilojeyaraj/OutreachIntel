@@ -1,28 +1,26 @@
-import Anthropic from '@anthropic-ai/sdk';
 import type { TailorJob } from './types';
 
-const DEFAULT_MODEL = process.env.ANTHROPIC_MODEL || 'claude-sonnet-4-6';
+// The whole app uses OpenRouter as its model gateway (see app/api/outreach/route.ts).
+// The tailor agents go through the same gateway so a single OPENROUTER_API_KEY powers
+// every feature. Model is configurable via OPENROUTER_MODEL (default openai/gpt-4o).
+const OPENROUTER_URL = 'https://openrouter.ai/api/v1/chat/completions';
+const DEFAULT_MODEL = process.env.OPENROUTER_MODEL || 'openai/gpt-4o';
 
-// SDK 0.32.1: cache_control lives on Beta types, not on the stable TextBlockParam.
-// We use client.beta.messages.create() with betas:['prompt-caching-2024-07-31'] so
-// the system array must be typed as BetaTextBlockParam[] (which carries cache_control).
-type BetaTextBlockParam = Anthropic.Beta.Messages.BetaTextBlockParam;
-type BetaTextBlock = Anthropic.Beta.Messages.BetaTextBlock;
-
-export interface ClaudeCallOptions {
+export interface ModelCallOptions {
   apiKey: string;
   model?: string;
   maxTokens?: number;
-  system?: BetaTextBlockParam[];
+  /** Shared system context (original resume + job), identical across agent calls. */
+  system?: string;
 }
 
 /**
- * Shared, cacheable context sent as the system prompt for every tailor agent.
- * The original resume + job are identical across the resume/cover/QA calls, so
- * marking them with cache_control lets Anthropic reuse the prefix and cut cost.
+ * Shared context sent as the system message for every tailor agent. The original
+ * resume + job are identical across the resume/cover/QA calls, so this prefix is
+ * reused verbatim (OpenAI-style automatic prompt caching applies on the gateway).
  */
-export function buildSharedSystem(resumeLatex: string, job: TailorJob): BetaTextBlockParam[] {
-  const context = `You are part of a job-application assistant. Below are the two pieces of shared context every step relies on. Treat the ORIGINAL RESUME as the only source of truth about the candidate: never introduce employers, job titles, dates, metrics, technologies, or skills that do not already appear in it.
+export function buildSharedSystem(resumeLatex: string, job: TailorJob): string {
+  return `You are part of a job-application assistant. Below are the two pieces of shared context every step relies on. Treat the ORIGINAL RESUME as the only source of truth about the candidate: never introduce employers, job titles, dates, metrics, technologies, or skills that do not already appear in it.
 
 ORIGINAL RESUME (LaTeX source):
 ${resumeLatex}
@@ -32,28 +30,67 @@ Title: ${job.title}
 Company: ${job.company}
 Description:
 ${job.description || '(no description provided)'}`;
-
-  return [{ type: 'text', text: context, cache_control: { type: 'ephemeral' } }];
 }
 
-export async function callClaudeText(prompt: string, opts: ClaudeCallOptions): Promise<string> {
-  const client = new Anthropic({ apiKey: opts.apiKey });
-  const message = await client.beta.messages.create({
-    model: opts.model || DEFAULT_MODEL,
-    max_tokens: opts.maxTokens ?? 4096,
-    betas: ['prompt-caching-2024-07-31'],
-    ...(opts.system ? { system: opts.system } : {}),
-    messages: [{ role: 'user', content: prompt }],
-  });
+/** Call the OpenRouter chat-completions API and return the message content text. */
+export async function callModel(prompt: string, opts: ModelCallOptions): Promise<string> {
+  const headers: Record<string, string> = {
+    Authorization: `Bearer ${opts.apiKey}`,
+    'Content-Type': 'application/json',
+  };
+  if (process.env.OPENROUTER_SITE_URL) {
+    headers['HTTP-Referer'] = process.env.OPENROUTER_SITE_URL;
+  }
+  if (process.env.OPENROUTER_SITE_NAME) {
+    headers['X-Title'] = process.env.OPENROUTER_SITE_NAME;
+  }
 
-  const text = message.content
-    .filter((block): block is BetaTextBlock => block.type === 'text')
-    .map((block) => block.text)
-    .join('\n')
-    .trim();
+  const messages: Array<{ role: 'system' | 'user'; content: string }> = [];
+  if (opts.system) messages.push({ role: 'system', content: opts.system });
+  messages.push({ role: 'user', content: prompt });
 
-  if (!text) throw new Error('Claude returned an empty message');
-  return text;
+  let upstream: Response;
+  try {
+    upstream = await fetch(OPENROUTER_URL, {
+      method: 'POST',
+      headers,
+      body: JSON.stringify({
+        model: opts.model || DEFAULT_MODEL,
+        max_tokens: opts.maxTokens ?? 8192,
+        messages,
+        response_format: { type: 'json_object' },
+      }),
+    });
+  } catch (err) {
+    const msg = err instanceof Error ? err.message : 'Unknown network error';
+    throw new Error(`OpenRouter request failed: ${msg}`);
+  }
+
+  if (!upstream.ok) {
+    const errText = await upstream.text().catch(() => '');
+    throw new Error(`OpenRouter returned ${upstream.status}: ${errText.slice(0, 500)}`);
+  }
+
+  let completion: {
+    choices?: Array<{ message?: { content?: string }; finish_reason?: string }>;
+  };
+  try {
+    completion = await upstream.json();
+  } catch {
+    throw new Error('OpenRouter returned invalid JSON envelope');
+  }
+
+  const choice = completion?.choices?.[0];
+  const content = choice?.message?.content;
+  if (typeof content !== 'string' || !content.trim()) {
+    throw new Error('OpenRouter returned an empty message');
+  }
+  if (choice?.finish_reason === 'length') {
+    throw new Error(
+      'Model output was truncated by max_tokens. Try a shorter resume or job description.',
+    );
+  }
+  return content.trim();
 }
 
 /** Shared defensive JSON-object extractor (mirrors lib/jobs/claude.ts style). */

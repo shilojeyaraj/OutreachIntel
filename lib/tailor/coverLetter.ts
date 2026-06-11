@@ -1,4 +1,4 @@
-import { buildSharedSystem, callClaudeText, extractJsonObject, parseJsonLoose } from './client';
+import { buildSharedSystem, callModel, extractJsonObject, parseJsonLoose } from './client';
 import type { CoverLetter, TailorInput, TailorJob, Tone } from './types';
 
 export function buildCoverLetterPrompt(job: TailorJob, tone?: Tone): string {
@@ -35,6 +35,6 @@ export async function runCoverLetter(
   if (revisionNote) {
     prompt += `\n\nA reviewer flagged problems with your previous draft. Fix these and re-verify nothing is fabricated:\n${revisionNote}`;
   }
-  const text = await callClaudeText(prompt, { apiKey, system });
+  const text = await callModel(prompt, { apiKey, system });
   return parseCoverLetterResponse(text);
 }

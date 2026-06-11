@@ -2,23 +2,15 @@
  * @jest-environment node
  *
  * Route imports next/server, which needs Web globals — run under node env.
- * The Anthropic SDK is mocked so no network calls happen.
+ * OpenRouter's `fetch` is replaced with a mock so no network calls happen.
  */
-const mockCreate = jest.fn();
-jest.mock('@anthropic-ai/sdk', () =>
-  jest.fn().mockImplementation(() => ({
-    messages: { create: mockCreate },
-    beta: { messages: { create: mockCreate } },
-  })),
-);
-
 import { POST } from '@/app/api/tailor/route';
 
 const RESUME = '\\documentclass{article}\\begin{document}Experience: Built APIs.\\end{document}';
 const VALID_BODY = {
   job: { title: 'Backend Engineer', company: 'Stripe', description: 'Build payment APIs.' },
   resumeLatex: RESUME,
-  anthropicKey: 'test-key',
+  openrouterKey: 'test-key',
 };
 
 function buildRequest(body: unknown): Request {
@@ -29,14 +21,49 @@ function buildRequest(body: unknown): Request {
   });
 }
 
-function reply(obj: unknown) {
-  return { content: [{ type: 'text', text: JSON.stringify(obj) }] };
+/** Wrap a model payload in the OpenRouter chat-completion envelope. */
+function envelope(payload: unknown): Response {
+  return new Response(
+    JSON.stringify({
+      choices: [{ finish_reason: 'stop', message: { content: JSON.stringify(payload) } }],
+    }),
+    { status: 200 },
+  );
+}
+
+/**
+ * Route the mock by which agent is calling, so the test is independent of the
+ * order the concurrent writers happen to fire in.
+ */
+function mockOpenRouter() {
+  global.fetch = jest.fn().mockImplementation((_url: string, init: { body: string }) => {
+    const reqBody = JSON.parse(init.body) as {
+      messages: Array<{ role: string; content: string }>;
+    };
+    const userMsg = reqBody.messages.find((m) => m.role === 'user')?.content ?? '';
+    let payload: unknown;
+    if (userMsg.includes('fact-checker')) {
+      payload = { issues: [] };
+    } else if (userMsg.includes('Write a cover letter')) {
+      payload = { letterText: 'Dear Stripe', paragraphs: ['Dear Stripe'] };
+    } else {
+      payload = { tailoredLatex: 'TAILORED', changes: [] };
+    }
+    return Promise.resolve(envelope(payload));
+  }) as unknown as typeof fetch;
 }
 
 const ORIGINAL_ENV = { ...process.env };
+const originalFetch = global.fetch;
+
+beforeEach(() => {
+  process.env.OPENROUTER_API_KEY = 'test-key';
+});
+
 afterEach(() => {
   process.env = { ...ORIGINAL_ENV };
-  jest.clearAllMocks();
+  global.fetch = originalFetch;
+  jest.restoreAllMocks();
 });
 
 it('returns 400 when resumeLatex is too short', async () => {
@@ -44,21 +71,17 @@ it('returns 400 when resumeLatex is too short', async () => {
   expect(res.status).toBe(400);
 });
 
-it('returns 400 when the anthropic key is missing', async () => {
-  delete process.env.ANTHROPIC_API_KEY;
-  const { anthropicKey, ...noKey } = VALID_BODY;
+it('returns 400 when the OpenRouter key is missing', async () => {
+  delete process.env.OPENROUTER_API_KEY;
+  const { openrouterKey, ...noKey } = VALID_BODY;
   const res = await POST(buildRequest(noKey));
   expect(res.status).toBe(400);
   const body = await res.json();
-  expect(body.error).toMatch(/anthropic/i);
+  expect(body.error).toMatch(/openrouter/i);
 });
 
 it('returns tailored output on the happy path', async () => {
-  // calls in order: resume, cover, QA (no issues)
-  mockCreate
-    .mockResolvedValueOnce(reply({ tailoredLatex: 'TAILORED', changes: [] }))
-    .mockResolvedValueOnce(reply({ letterText: 'Dear Stripe', paragraphs: ['Dear Stripe'] }))
-    .mockResolvedValueOnce(reply({ issues: [] }));
+  mockOpenRouter();
 
   const res = await POST(buildRequest(VALID_BODY));
   expect(res.status).toBe(200);

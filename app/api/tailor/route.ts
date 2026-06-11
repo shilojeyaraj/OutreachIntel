@@ -38,10 +38,10 @@ export async function POST(req: Request) {
     return NextResponse.json({ error: validationError }, { status: 400 });
   }
 
-  const anthropicKey = body.anthropicKey || process.env.ANTHROPIC_API_KEY;
-  if (!anthropicKey) {
+  const apiKey = body.openrouterKey || process.env.OPENROUTER_API_KEY;
+  if (!apiKey) {
     return NextResponse.json(
-      { error: 'Anthropic key is required. Provide it in the form or set ANTHROPIC_API_KEY.' },
+      { error: 'OpenRouter key is required. Provide it in the form or set OPENROUTER_API_KEY.' },
       { status: 400 },
     );
   }
@@ -50,7 +50,7 @@ export async function POST(req: Request) {
   const looksLatex = /\\(begin\{document\}|documentclass)/.test(body.resumeLatex);
 
   try {
-    const result = await runTailorPipeline(body, anthropicKey);
+    const result = await runTailorPipeline(body, apiKey);
     if (!looksLatex && !result.warning) {
       result.warning =
         'Resume did not look like LaTeX (no \\documentclass or \\begin{document}). Tailored output may be off.';
@@ -61,7 +61,7 @@ export async function POST(req: Request) {
     const lower = msg.toLowerCase();
     if (lower.includes('401') || lower.includes('forbidden') || lower.includes('authentication')) {
       return NextResponse.json(
-        { error: 'Anthropic key invalid or out of credits.' },
+        { error: 'OpenRouter key invalid or out of credits.' },
         { status: 502 },
       );
     }

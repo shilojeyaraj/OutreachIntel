@@ -1,4 +1,4 @@
-import { buildSharedSystem, callClaudeText, extractJsonObject, parseJsonLoose } from './client';
+import { buildSharedSystem, callModel, extractJsonObject, parseJsonLoose } from './client';
 import type { QAIssue, QAIssueType, QATarget, TailorInput, TailorJob } from './types';
 
 const ISSUE_TYPES: QAIssueType[] = ['fabrication', 'weak', 'tone', 'offtarget'];
@@ -56,6 +56,6 @@ export async function runQA(
 ): Promise<QAIssue[]> {
   const system = buildSharedSystem(input.resumeLatex, input.job);
   const prompt = buildQAPrompt(input.job, tailoredLatex, letterText);
-  const text = await callClaudeText(prompt, { apiKey, system });
+  const text = await callModel(prompt, { apiKey, system });
   return parseQAResponse(text);
 }

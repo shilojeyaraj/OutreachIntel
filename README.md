@@ -57,7 +57,7 @@ Paste a target job (title, company, description) and your resume's LaTeX source 
 - **Resume output:** tailored LaTeX you copy directly into your editor (e.g. Overleaf). There is no server-side LaTeX compilation.
 - **Cover letter output:** a downloadable PDF generated in the browser from the drafted text.
 - **QA fact-check:** a built-in pass compares both drafts against your original resume (the source of truth), auto-revises once, and flags anything it could not resolve. The system never invents employers, titles, dates, metrics, or skills not present in your resume.
-- Requires `ANTHROPIC_API_KEY` (same key as `/jobs`; set in `.env.local` or paste directly into the form).
+- Uses `OPENROUTER_API_KEY` — the same gateway the rest of the app uses (set in `.env.local`, or paste a key into the form). The model is configurable via `OPENROUTER_MODEL` (default `openai/gpt-4o`).
 
 ## How it works
 

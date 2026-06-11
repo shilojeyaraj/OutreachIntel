@@ -48,7 +48,7 @@ export default function TailorPage() {
           job: { title, company, description },
           resumeLatex,
           tone,
-          ...(apiKey ? { anthropicKey: apiKey } : {}),
+          ...(apiKey ? { openrouterKey: apiKey } : {}),
         }),
       });
       const body = await res.json();
@@ -112,7 +112,7 @@ export default function TailorPage() {
           </select>
           <input
             className="flex-1 rounded border p-2"
-            placeholder="Anthropic API key (optional if set on server)"
+            placeholder="OpenRouter API key (optional if set on server)"
             value={apiKey}
             onChange={(e) => setApiKey(e.target.value)}
           />
