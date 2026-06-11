@@ -66,7 +66,8 @@ Paste a target job (title, company, description) and your resume's LaTeX source 
 3. The real hits get formatted into a numbered grounding block and injected into the prompt.
 4. OpenRouter is called with `response_format: { type: "json_object" }` so GPT-4 must return valid JSON.
 5. `lib/parseResponse.ts` strips fences, trailing commas, and control characters before `JSON.parse`.
-6. The UI sorts the 6 returned people by score descending, renders cards, and shows a "Grounded" badge when live search succeeded.
+6. If `APIFY_API_TOKEN` is set, a second Apify search (`lib/xsearch.ts`) looks up each chosen person's real X (Twitter) profile; a handle is attached only on a confident profile-URL + name match, otherwise the card shows a fallback "Find on X" search link. This pass never fails the request.
+7. The UI sorts the returned people by score descending, renders cards (with the X handle or fallback link), and shows a "Grounded" badge when live search succeeded.
 
 ## Deployment (Vercel)
 
