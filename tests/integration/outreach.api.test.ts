@@ -100,4 +100,83 @@ describe('POST /api/outreach', () => {
 
   // TODO: cover OpenRouter 5xx propagation, finish_reason=length truncation,
   // malformed JSON in `message.content`, and the APIFY_API_TOKEN happy path.
+
+  // --- X account enrichment ---
+
+  const X_MODEL_PAYLOAD = {
+    strategy: 'Lead with Waterloo alumni.',
+    people: [
+      { name: 'Ada Lovelace', company: 'OpenAI', role: 'MLE', message: 'hi' },
+      { name: 'Charles Babbage', company: 'OpenAI', role: 'SWE', message: 'hi' },
+    ],
+  };
+
+  // Routes a fetch call to the right canned response based on its URL/body.
+  function mockOutreachPipeline(opts: { xDataset?: unknown; xStatus?: number }) {
+    global.fetch = jest.fn().mockImplementation((url: string, init?: { body?: string }) => {
+      const u = String(url);
+      if (u.includes('openrouter.ai')) {
+        return Promise.resolve(
+          new Response(
+            JSON.stringify({
+              choices: [
+                { finish_reason: 'stop', message: { content: JSON.stringify(X_MODEL_PAYLOAD) } },
+              ],
+            }),
+            { status: 200 },
+          ),
+        );
+      }
+      // Apify: distinguish the LinkedIn pass from the X pass by the query body.
+      const body = init?.body ? JSON.parse(init.body) : {};
+      const queries = String(body.queries ?? '');
+      if (queries.includes('site:x.com')) {
+        return Promise.resolve(
+          new Response(JSON.stringify(opts.xDataset ?? []), { status: opts.xStatus ?? 200 }),
+        );
+      }
+      return Promise.resolve(new Response(JSON.stringify([]), { status: 200 })); // LinkedIn pass
+    }) as unknown as typeof fetch;
+  }
+
+  it('attaches a real X handle on a name match and falls back otherwise', async () => {
+    process.env.APIFY_API_TOKEN = 'apify-test-token';
+    mockOutreachPipeline({
+      xDataset: [
+        {
+          organicResults: [
+            {
+              title: 'Ada Lovelace (@adalovelace) / X',
+              url: 'https://x.com/adalovelace',
+              description: '',
+            },
+          ],
+        },
+        { organicResults: [{ title: 'Search / X', url: 'https://x.com/search?q=charles' }] },
+      ],
+    });
+
+    const res = await POST(buildRequest(VALID_BODY));
+    expect(res.status).toBe(200);
+    const body = await res.json();
+
+    expect(body.people[0].x_handle).toBe('adalovelace');
+    expect(body.people[0].x_url).toBe('https://x.com/adalovelace');
+    // No profile match for the second person — only the fallback search link.
+    expect(body.people[1].x_handle).toBeUndefined();
+    expect(body.people[1].x_url).toBeUndefined();
+    expect(body.people[1].x_query).toContain('x.com/search');
+  });
+
+  it('returns 200 with x_query fallbacks and a warning when the X search fails', async () => {
+    process.env.APIFY_API_TOKEN = 'apify-test-token';
+    mockOutreachPipeline({ xStatus: 500 });
+
+    const res = await POST(buildRequest(VALID_BODY));
+    expect(res.status).toBe(200);
+    const body = await res.json();
+    expect(body.xSearchWarning).toBeTruthy();
+    expect(body.people[0].x_handle).toBeUndefined();
+    expect(body.people[0].x_query).toContain('x.com/search');
+  });
 });

@@ -3,6 +3,7 @@ import { buildPrompt } from '@/lib/prompt';
 import { parseModelJSON } from '@/lib/parseResponse';
 import { searchLinkedInTargets, formatHitsForPrompt } from '@/lib/apify';
 import { MAX_TARGETS, MIN_TARGETS, type OutreachInput } from '@/lib/types';
+import { searchXHandles, matchHandleToPerson, buildXSearchUrl } from '@/lib/xsearch';
 
 export const runtime = 'nodejs';
 export const maxDuration = 120;
@@ -44,7 +45,10 @@ export async function POST(req: Request) {
       searchResultsBlock = formatHitsForPrompt(hits);
     } catch (err) {
       apifyWarning = err instanceof Error ? err.message : 'Unknown Apify error';
-      console.warn('[outreach] Apify search failed, falling back to ungrounded prompt:', apifyWarning);
+      console.warn(
+        '[outreach] Apify search failed, falling back to ungrounded prompt:',
+        apifyWarning,
+      );
     }
   }
 
@@ -99,7 +103,10 @@ export async function POST(req: Request) {
   try {
     completion = await upstream.json();
   } catch {
-    return NextResponse.json({ error: 'OpenRouter returned invalid JSON envelope' }, { status: 502 });
+    return NextResponse.json(
+      { error: 'OpenRouter returned invalid JSON envelope' },
+      { status: 502 },
+    );
   }
 
   const content: string | undefined = completion?.choices?.[0]?.message?.content;
@@ -122,9 +129,50 @@ export async function POST(req: Request) {
 
   try {
     const parsed = parseModelJSON(content);
+
+    // Every target gets a fallback X people-search link.
+    for (const person of parsed.people) {
+      person.x_query = buildXSearchUrl(person.name, person.company);
+    }
+
+    // Enrich with real handles when Apify is available (same gate as LinkedIn
+    // grounding). This pass can never fail the request — on any error every
+    // target simply keeps its x_query fallback.
+    let xSearchWarning: string | undefined;
+    if (process.env.APIFY_API_TOKEN) {
+      try {
+        const xHits = await searchXHandles(
+          parsed.people.map((p: { name: string; company: string }) => ({
+            name: p.name,
+            company: p.company,
+          })),
+          { timeoutMs: 30_000 },
+        );
+        parsed.people.forEach(
+          (
+            person: { name: string; company: string; x_handle?: string; x_url?: string },
+            i: number,
+          ) => {
+            const match = matchHandleToPerson(person, xHits[i] ?? []);
+            if (match) {
+              person.x_handle = match.handle;
+              person.x_url = match.url;
+            }
+          },
+        );
+      } catch (xErr) {
+        xSearchWarning = xErr instanceof Error ? xErr.message : 'X account search failed';
+        console.warn(
+          '[outreach] X account search failed, returning fallback links:',
+          xSearchWarning,
+        );
+      }
+    }
+
     const responseBody: Record<string, unknown> = { ...parsed };
     if (searchResultsBlock) responseBody.grounded = true;
     if (apifyWarning) responseBody.apifyWarning = apifyWarning;
+    if (xSearchWarning) responseBody.xSearchWarning = xSearchWarning;
     return NextResponse.json(responseBody);
   } catch (err) {
     const msg = err instanceof Error ? err.message : 'Unknown parse error';
