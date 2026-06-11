@@ -58,7 +58,9 @@ export function PersonCard({ person, index }: Props) {
           <h3 className="truncate text-lg font-semibold text-white">{person.name}</h3>
           <p className="truncate text-sm text-accent-hover">{person.role}</p>
         </div>
-        <div className={`shrink-0 rounded-lg border px-3 py-1.5 text-center ${getScoreColor(person.score)}`}>
+        <div
+          className={`shrink-0 rounded-lg border px-3 py-1.5 text-center ${getScoreColor(person.score)}`}
+        >
           <div className="text-lg font-bold leading-none">{person.score}</div>
           <div className="text-[9px] uppercase tracking-wider opacity-70">/ 10</div>
         </div>
@@ -78,12 +80,16 @@ export function PersonCard({ person, index }: Props) {
       )}
 
       <div>
-        <div className="mb-1 text-[10px] font-semibold uppercase tracking-wider text-slate-500">Why</div>
+        <div className="mb-1 text-[10px] font-semibold uppercase tracking-wider text-slate-500">
+          Why
+        </div>
         <p className="text-sm leading-relaxed text-slate-300">{person.why}</p>
       </div>
 
       <div className="rounded-lg border border-accent/30 bg-accent/5 p-3">
-        <div className="mb-1 text-[10px] font-semibold uppercase tracking-wider text-accent-hover">Hook</div>
+        <div className="mb-1 text-[10px] font-semibold uppercase tracking-wider text-accent-hover">
+          Hook
+        </div>
         <p className="text-sm leading-relaxed text-slate-200">{person.hook}</p>
       </div>
 
@@ -120,15 +126,41 @@ export function PersonCard({ person, index }: Props) {
         </code>
         {hasDirectUrl && person.linkedin_query && (
           <div className="mt-1 text-[10px] text-slate-500">
-            Backup search:{' '}
-            <code className="font-mono text-slate-400">{person.linkedin_query}</code>
+            Backup search: <code className="font-mono text-slate-400">{person.linkedin_query}</code>
           </div>
+        )}
+      </div>
+
+      <div className="flex items-center gap-2 text-[10px]">
+        <span className="font-semibold uppercase tracking-wider text-slate-500">X / Twitter</span>
+        {person.x_url ? (
+          <a
+            href={person.x_url}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="font-medium text-accent-hover hover:underline"
+          >
+            Message on X @{person.x_handle} ↗
+          </a>
+        ) : person.x_query ? (
+          <a
+            href={person.x_query}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="font-medium text-slate-400 hover:text-white hover:underline"
+          >
+            Find on X ↗
+          </a>
+        ) : (
+          <span className="text-slate-600">—</span>
         )}
       </div>
 
       <div>
         <div className="mb-1 flex items-center justify-between">
-          <div className="text-[10px] font-semibold uppercase tracking-wider text-slate-500">Message</div>
+          <div className="text-[10px] font-semibold uppercase tracking-wider text-slate-500">
+            Message
+          </div>
           <button
             type="button"
             onClick={() => copy(person.message, 'message')}
