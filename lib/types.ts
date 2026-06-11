@@ -24,6 +24,11 @@ export interface Person {
   linkedin_query: string;
   linkedin_url?: string;
   message: string;
+  // X (Twitter) enrichment. x_query is always populated by the route; x_handle
+  // and x_url are set only when a real profile is found and the name matches.
+  x_handle?: string;
+  x_url?: string;
+  x_query?: string;
 }
 
 export interface OutreachResponse {
@@ -31,6 +36,7 @@ export interface OutreachResponse {
   people: Person[];
   grounded?: boolean;
   apifyWarning?: string;
+  xSearchWarning?: string;
 }
 
 export interface ApiError {
