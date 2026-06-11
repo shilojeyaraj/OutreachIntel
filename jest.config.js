@@ -22,14 +22,11 @@ const customJestConfig = {
     '^@/(.*)$': '<rootDir>/$1',
   },
 
-  collectCoverageFrom: [
-    'app/**/*.{ts,tsx}',
-    'components/**/*.{ts,tsx}',
-    'lib/**/*.{ts,tsx}',
-    '!**/*.d.ts',
-    '!**/node_modules/**',
-    '!app/**/layout.tsx',
-  ],
+  // Coverage gates apply to unit-testable library logic only. React pages and
+  // components, plus thin API route handlers, are exercised via integration/e2e
+  // tests (see tests/integration) rather than unit tests, so they are kept out
+  // of the coverage scope to keep the gate meaningful instead of measuring UI.
+  collectCoverageFrom: ['lib/**/*.{ts,tsx}', '!**/*.d.ts', '!**/node_modules/**'],
 
   // Coverage gates — bump these up as the test suite grows.
   coverageThreshold: {
