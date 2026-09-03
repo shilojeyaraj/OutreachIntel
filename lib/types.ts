@@ -1,11 +1,16 @@
-export type Goal = 'referral' | 'advice' | 'both' | 'coffee';
-
 export interface OutreachInput {
+  /** Free text: who to find, e.g. "health tech PMs and founders". */
+  persona: string;
+  /** Free text: who the requester is and why they are reaching out. */
   background: string;
-  roleType: string;
-  goal: Goal;
-  term: string;
+  /** Free text: what the requester wants out of the outreach. */
+  goal: string;
+  /** Optional organizations, systems, or firms to focus on. May be empty. */
   companies: string[];
+  /** Optional geographic focus, e.g. "Toronto, Canada". */
+  region?: string;
+  /** Preset id (see lib/presets.ts) — drives prompt priority + search hints. */
+  preset?: string;
   count: number;
 }
 

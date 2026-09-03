@@ -13,12 +13,11 @@
 import { POST } from '@/app/api/outreach/route';
 
 const VALID_BODY = {
+  persona: 'Health tech product managers, product leaders, and founders',
   background:
-    '2nd year Mechatronics Engineering at University of Waterloo, ML focus, PyTorch and CUDA experience.',
-  roleType: 'Machine Learning Engineer Intern',
-  goal: 'referral',
-  term: 'Fall 2026',
-  companies: ['OpenAI', 'Anthropic'],
+    '2nd year Mechatronics Engineering at University of Waterloo, moving toward health tech PM. ML internships and a FinTech founding-engineer role.',
+  goal: 'Get advice on breaking into health tech product management and a referral where it fits',
+  companies: ['Verily', 'Oscar Health'],
   count: 3,
 };
 
@@ -50,6 +49,32 @@ describe('POST /api/outreach', () => {
     expect(res.status).toBe(400);
     const body = await res.json();
     expect(body.error).toMatch(/background/i);
+  });
+
+  it('returns 400 when persona is too short', async () => {
+    const res = await POST(buildRequest({ ...VALID_BODY, persona: 'PMs' }));
+    expect(res.status).toBe(400);
+    const body = await res.json();
+    expect(body.error).toMatch(/persona/i);
+  });
+
+  it('accepts an empty companies list', async () => {
+    global.fetch = jest.fn().mockResolvedValue(
+      new Response(
+        JSON.stringify({
+          choices: [
+            {
+              finish_reason: 'stop',
+              message: { content: JSON.stringify({ strategy: 's', people: [] }) },
+            },
+          ],
+        }),
+        { status: 200 },
+      ),
+    ) as unknown as typeof fetch;
+
+    const res = await POST(buildRequest({ ...VALID_BODY, companies: [] }));
+    expect(res.status).toBe(200);
   });
 
   it('returns 500 when OPENROUTER_API_KEY is missing', async () => {

@@ -13,26 +13,46 @@ export interface SearchHit {
   title: string;
   url: string;
   description: string;
+  /** Label for the hit: the target org, or the persona when no orgs were given. */
   company: string;
 }
 
 export interface SearchOptions {
+  /** Free text describing who to find. */
+  persona: string;
+  /** Requester background — used only to nudge queries, never required. */
   background: string;
+  /** Organizations to focus on. Empty means run a single persona-wide query. */
   companies: string[];
-  roleType: string;
+  /** Optional geographic focus appended to every query. */
+  region?: string;
+  /** Preset-supplied keyword group OR-ed into every query. */
+  searchHints?: string;
   resultsPerCompany?: number;
   timeoutMs?: number;
 }
 
-function buildQuery(company: string, background: string, roleType: string): string {
-  const cleanCompany = company.replace(/\s*\/\s*/g, ' OR ');
-  const universityMatch = background.match(/University of (\w+)/i);
-  const university = universityMatch ? universityMatch[0] : 'University of Waterloo';
-  const roleHint = roleType.toLowerCase().includes('research')
-    ? 'research scientist OR applied scientist OR recruiter'
-    : 'engineer OR recruiter OR intern';
+/** Collapse persona free text into a bare keyword group safe for a search query. */
+function personaKeywords(persona: string): string {
+  const cleaned = persona.replace(/["()]/g, ' ').replace(/\s+/g, ' ').trim();
+  return cleaned.length > 0 ? cleaned : 'professional';
+}
 
-  return `site:linkedin.com/in (${cleanCompany}) (${university} OR alumni OR ${roleHint})`;
+function coreTerms(opts: SearchOptions): string {
+  return opts.searchHints?.trim() || personaKeywords(opts.persona);
+}
+
+function regionSuffix(opts: SearchOptions): string {
+  return opts.region && opts.region.trim() ? ` ${opts.region.trim()}` : '';
+}
+
+function buildOrgQuery(org: string, opts: SearchOptions): string {
+  const cleanOrg = org.replace(/\s*\/\s*/g, ' OR ');
+  return `site:linkedin.com/in (${cleanOrg}) (${coreTerms(opts)})${regionSuffix(opts)}`;
+}
+
+function buildPersonaQuery(opts: SearchOptions): string {
+  return `site:linkedin.com/in (${coreTerms(opts)})${regionSuffix(opts)}`;
 }
 
 export async function searchLinkedInTargets(opts: SearchOptions): Promise<SearchHit[]> {
@@ -44,7 +64,10 @@ export async function searchLinkedInTargets(opts: SearchOptions): Promise<Search
   const resultsPerCompany = opts.resultsPerCompany ?? 8;
   const timeoutMs = opts.timeoutMs ?? 45_000;
 
-  const queries = opts.companies.map((c) => buildQuery(c, opts.background, opts.roleType));
+  const targets = opts.companies.filter((c) => c.trim().length > 0);
+  const queries =
+    targets.length > 0 ? targets.map((c) => buildOrgQuery(c, opts)) : [buildPersonaQuery(opts)];
+  const labels = targets.length > 0 ? targets : [opts.persona];
 
   const url = `https://api.apify.com/v2/acts/${APIFY_ACTOR}/run-sync-get-dataset-items?token=${encodeURIComponent(
     token,
@@ -88,7 +111,7 @@ export async function searchLinkedInTargets(opts: SearchOptions): Promise<Search
   const hits: SearchHit[] = [];
   items.forEach((item, idx) => {
     if (!item || typeof item !== 'object') return;
-    const company = opts.companies[idx] ?? opts.companies[0] ?? '';
+    const company = labels[idx] ?? labels[0] ?? '';
     const record = item as Record<string, unknown>;
     const organic = Array.isArray(record.organicResults) ? record.organicResults : [];
     organic.forEach((rawHit) => {

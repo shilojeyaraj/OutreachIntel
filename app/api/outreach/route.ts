@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server';
 import { buildPrompt } from '@/lib/prompt';
 import { parseModelJSON } from '@/lib/parseResponse';
 import { searchLinkedInTargets, formatHitsForPrompt } from '@/lib/apify';
+import { getPreset } from '@/lib/presets';
 import { MAX_TARGETS, MIN_TARGETS, type OutreachInput } from '@/lib/types';
 import { searchXHandles, matchHandleToPerson, buildXSearchUrl } from '@/lib/xsearch';
 
@@ -31,14 +32,19 @@ export async function POST(req: Request) {
     return NextResponse.json({ error: validationError }, { status: 400 });
   }
 
+  const preset = getPreset(body.preset);
+  const companies = Array.isArray(body.companies) ? body.companies : [];
+
   let searchResultsBlock: string | undefined;
   let apifyWarning: string | undefined;
   if (process.env.APIFY_API_TOKEN) {
     try {
       const hits = await searchLinkedInTargets({
+        persona: body.persona,
         background: body.background,
-        companies: body.companies,
-        roleType: body.roleType,
+        companies,
+        region: body.region,
+        searchHints: preset.searchHints,
         resultsPerCompany: 8,
         timeoutMs: 60_000,
       });
@@ -53,7 +59,10 @@ export async function POST(req: Request) {
   }
 
   const model = process.env.OPENROUTER_MODEL || 'openai/gpt-4o';
-  const prompt = buildPrompt(body, { searchResults: searchResultsBlock });
+  const prompt = buildPrompt(body, {
+    searchResults: searchResultsBlock,
+    priorityHints: preset.priorityHints,
+  });
 
   const headers: Record<string, string> = {
     Authorization: `Bearer ${apiKey}`,
@@ -185,20 +194,26 @@ export async function POST(req: Request) {
 
 function validateInput(input: Partial<OutreachInput> | null | undefined): string | null {
   if (!input || typeof input !== 'object') return 'Body must be an object';
+  if (typeof input.persona !== 'string' || input.persona.trim().length < 10) {
+    return 'persona must be a string of at least 10 characters describing who to find';
+  }
   if (typeof input.background !== 'string' || input.background.trim().length < 20) {
     return 'background must be a string of at least 20 characters';
   }
-  if (typeof input.roleType !== 'string' || !input.roleType.trim()) {
-    return 'roleType is required';
+  if (typeof input.goal !== 'string' || !input.goal.trim()) {
+    return 'goal is required';
   }
-  if (!['referral', 'advice', 'both', 'coffee'].includes(input.goal as string)) {
-    return 'goal must be one of: referral, advice, both, coffee';
+  if (input.companies !== undefined && !Array.isArray(input.companies)) {
+    return 'companies must be an array when provided';
   }
-  if (typeof input.term !== 'string' || !input.term.trim()) {
-    return 'term is required';
+  if (Array.isArray(input.companies) && input.companies.some((c) => typeof c !== 'string')) {
+    return 'companies must be an array of strings';
   }
-  if (!Array.isArray(input.companies) || input.companies.length === 0) {
-    return 'companies must be a non-empty array';
+  if (input.region !== undefined && typeof input.region !== 'string') {
+    return 'region must be a string when provided';
+  }
+  if (input.preset !== undefined && typeof input.preset !== 'string') {
+    return 'preset must be a string when provided';
   }
   const count = Number(input.count);
   if (!Number.isInteger(count) || count < MIN_TARGETS || count > MAX_TARGETS) {
