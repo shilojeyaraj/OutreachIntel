@@ -5,14 +5,6 @@ import type { Person } from '@/lib/types';
 
 interface Props {
   person: Person;
-  index: number;
-}
-
-function getScoreColor(score: number): string {
-  if (score >= 9) return 'text-green-400 border-green-500/40 bg-green-500/10';
-  if (score >= 7) return 'text-blue-400 border-blue-500/40 bg-blue-500/10';
-  if (score >= 5) return 'text-yellow-400 border-yellow-500/40 bg-yellow-500/10';
-  return 'text-red-400 border-red-500/40 bg-red-500/10';
 }
 
 function getTagColor(tag: string): string {
@@ -23,13 +15,19 @@ function getTagColor(tag: string): string {
   if (lower.includes('recruit') || lower.includes('active') || lower.includes('hiring')) {
     return 'bg-blue-500/15 text-blue-300 border-blue-500/30';
   }
-  if (lower.includes('intern') || lower.includes('new grad')) {
+  if (
+    lower.includes('intern') ||
+    lower.includes('new grad') ||
+    lower.includes('switcher') ||
+    lower.includes('founder')
+  ) {
     return 'bg-purple-500/15 text-purple-300 border-purple-500/30';
   }
   return 'bg-slate-500/15 text-slate-300 border-slate-500/30';
 }
 
-export function PersonCard({ person, index }: Props) {
+/** The expanded body of a PersonList row: tags, why, hook, links, and message. */
+export function PersonDetails({ person }: Props) {
   const [copiedField, setCopiedField] = useState<string | null>(null);
 
   async function copy(text: string, field: string) {
@@ -47,25 +45,7 @@ export function PersonCard({ person, index }: Props) {
   const primaryUrl = hasDirectUrl ? person.linkedin_url! : linkedinSearchUrl;
 
   return (
-    <div className="flex flex-col gap-4 rounded-xl border border-border bg-surface p-5 transition-colors hover:border-accent/40">
-      <div className="flex items-start justify-between gap-3">
-        <div className="min-w-0 flex-1">
-          <div className="mb-1 flex items-center gap-2 text-[10px] uppercase tracking-wider text-slate-500">
-            <span>#{index + 1}</span>
-            <span>•</span>
-            <span>{person.company}</span>
-          </div>
-          <h3 className="truncate text-lg font-semibold text-white">{person.name}</h3>
-          <p className="truncate text-sm text-accent-hover">{person.role}</p>
-        </div>
-        <div
-          className={`shrink-0 rounded-lg border px-3 py-1.5 text-center ${getScoreColor(person.score)}`}
-        >
-          <div className="text-lg font-bold leading-none">{person.score}</div>
-          <div className="text-[9px] uppercase tracking-wider opacity-70">/ 10</div>
-        </div>
-      </div>
-
+    <div className="flex flex-col gap-4 border-t border-border px-5 py-4">
       {person.tags.length > 0 && (
         <div className="flex flex-wrap gap-1.5">
           {person.tags.map((tag) => (

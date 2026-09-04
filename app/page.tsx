@@ -2,98 +2,67 @@
 
 import Link from 'next/link';
 import { useState } from 'react';
-import { CompanyChips } from '@/components/CompanyChips';
 import { StrategyBanner } from '@/components/StrategyBanner';
 import { LoadingSkeleton } from '@/components/LoadingSkeleton';
-import { PersonCard } from '@/components/PersonCard';
-import {
-  DEFAULT_TARGETS,
-  MAX_TARGETS,
-  MIN_TARGETS,
-  type Goal,
-  type OutreachResponse,
-} from '@/lib/types';
-
-const COMPANIES = [
-  'Google / DeepMind',
-  'Meta AI',
-  'OpenAI',
-  'Anthropic',
-  'Microsoft / MSR',
-  'Amazon / AWS',
-  'Nvidia',
-  'Apple',
-  'Cohere',
-  'Hugging Face',
-  'Mistral AI',
-  'Shopify',
-  'Databricks',
-  'Scale AI',
-  'Waymo',
-  'xAI',
-] as const;
-
-const DEFAULT_COMPANIES = ['Google / DeepMind', 'Meta AI', 'OpenAI', 'Anthropic', 'Nvidia'];
-
-const ROLE_TYPES = [
-  'Machine Learning Engineer Intern',
-  'Software Engineer Intern',
-  'AI Research Intern',
-  'Applied Scientist Intern',
-  'ML Infrastructure Intern',
-];
-
-const GOALS: { value: Goal; label: string }[] = [
-  { value: 'referral', label: 'Referral for an internship' },
-  { value: 'advice', label: 'Insider career advice' },
-  { value: 'both', label: 'Both referral and advice' },
-  { value: 'coffee', label: 'Coffee chat / informational' },
-];
-
-const TERMS = ['Fall 2026', 'Winter 2027', 'Summer 2027'];
-
-const DEFAULT_BACKGROUND = `2nd year Mechatronics Engineering @ University of Waterloo, pursuing AI specialization.
-Currently MLE intern @ Cohere Labs (PyTorch, LoRA, LLM inference optimization) and ML Engineering Intern @ biotech AI lab (LangGraph multi-agent systems, RAG, pgvector).
-Previous founding engineer at FinTech startup (FastAPI, PostgreSQL, WebSockets, RAG pipeline).
-Strong in Python, C++, TypeScript, PyTorch, LangChain.
-Built GPU Training Autotuner with NVML/CUDA C++ bindings.
-Won 2nd place at NexHacks 2026 @ CMU for a real-time Polymarket intelligence Chrome extension.`;
+import { PersonList } from '@/components/PersonList';
+import { PRESETS, getPreset, DEFAULT_PRESET_ID } from '@/lib/presets';
+import { DEFAULT_TARGETS, MAX_TARGETS, MIN_TARGETS, type OutreachResponse } from '@/lib/types';
 
 const PRO_TIPS = [
-  'Personalize every message — find one specific detail from their actual LinkedIn before sending.',
+  'Personalize every message — find one specific detail from their actual profile before sending.',
   'Best send times: Tuesday–Thursday, 8–10am or 6–8pm in their timezone.',
-  'Send connection request + note simultaneously (LinkedIn note limit: 300 chars).',
+  'Send the connection request and note together (LinkedIn note limit: 300 chars).',
   'One follow-up after 7 days max — keep it short.',
-  'UWaterloo alumni respond at ~3× the rate of cold strangers for Waterloo students.',
-  'Former interns (1–3 years out) have the highest referral conversion rate — they remember how they got in.',
+  'People who made the same switch 1–3 years ago respond at the highest rate — they remember how they did it.',
+  'Ask for advice, not a job. Referrals follow a good conversation.',
 ];
 
+function splitCompanies(text: string): string[] {
+  return text
+    .split(/[\n,]/)
+    .map((s) => s.trim())
+    .filter(Boolean);
+}
+
 export default function Page() {
-  const [background, setBackground] = useState(DEFAULT_BACKGROUND);
-  const [roleType, setRoleType] = useState(ROLE_TYPES[0]);
-  const [goal, setGoal] = useState<Goal>('both');
-  const [term, setTerm] = useState(TERMS[0]);
-  const [companies, setCompanies] = useState<string[]>(DEFAULT_COMPANIES);
+  const [presetId, setPresetId] = useState<string>(DEFAULT_PRESET_ID);
+  const initialPreset = getPreset(DEFAULT_PRESET_ID);
+
+  const [persona, setPersona] = useState(initialPreset.defaults.persona);
+  const [background, setBackground] = useState(initialPreset.defaults.background);
+  const [goal, setGoal] = useState(initialPreset.defaults.goal);
+  const [companiesText, setCompaniesText] = useState(initialPreset.defaults.companies.join(', '));
+  const [region, setRegion] = useState(initialPreset.defaults.region);
   const [count, setCount] = useState<number>(DEFAULT_TARGETS);
 
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [result, setResult] = useState<OutreachResponse | null>(null);
 
-  function toggleCompany(c: string) {
-    setCompanies((prev) => (prev.includes(c) ? prev.filter((x) => x !== c) : [...prev, c]));
+  function applyPreset(id: string) {
+    setPresetId(id);
+    const preset = getPreset(id);
+    setPersona(preset.defaults.persona);
+    setBackground(preset.defaults.background);
+    setGoal(preset.defaults.goal);
+    setCompaniesText(preset.defaults.companies.join(', '));
+    setRegion(preset.defaults.region);
   }
 
   async function run() {
     setError(null);
     setResult(null);
 
-    if (companies.length === 0) {
-      setError('Pick at least one target company.');
+    if (persona.trim().length < 10) {
+      setError('Describe who you are looking for (at least 10 characters).');
       return;
     }
     if (background.trim().length < 20) {
       setError('Background needs at least 20 characters.');
+      return;
+    }
+    if (goal.trim().length === 0) {
+      setError('Add a goal for the outreach.');
       return;
     }
 
@@ -102,7 +71,15 @@ export default function Page() {
       const res = await fetch('/api/outreach', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ background, roleType, goal, term, companies, count }),
+        body: JSON.stringify({
+          persona,
+          background,
+          goal,
+          companies: splitCompanies(companiesText),
+          region: region.trim() || undefined,
+          preset: presetId,
+          count,
+        }),
       });
       const data = await res.json();
       if (!res.ok) {
@@ -126,7 +103,7 @@ export default function Page() {
           <div>
             <h1 className="text-xl font-bold text-white">ColdReach Intel</h1>
             <p className="text-xs text-slate-400">
-              AI-ranked LinkedIn outreach targets for student internship hunts
+              AI-ranked LinkedIn outreach targets for whoever you need to reach
             </p>
           </div>
           <div className="flex items-center gap-4 text-xs text-slate-500">
@@ -143,73 +120,90 @@ export default function Page() {
           <div className="sticky top-6 space-y-5 rounded-xl border border-border bg-surface p-5">
             <div>
               <label className="mb-1.5 block text-xs font-semibold uppercase tracking-wider text-slate-400">
-                Your background
+                Preset
+              </label>
+              <select
+                value={presetId}
+                onChange={(e) => applyPreset(e.target.value)}
+                className="w-full rounded-lg border border-border bg-background px-3 py-2 text-sm text-slate-200 focus:border-accent focus:outline-none"
+              >
+                {PRESETS.map((p) => (
+                  <option key={p.id} value={p.id}>
+                    {p.label}
+                  </option>
+                ))}
+              </select>
+              <p className="mt-1 text-[10px] text-slate-500">
+                Changing the preset refills the fields below — edit them freely afterward.
+              </p>
+            </div>
+
+            <div>
+              <label className="mb-1.5 block text-xs font-semibold uppercase tracking-wider text-slate-400">
+                Looking for
               </label>
               <textarea
-                value={background}
-                onChange={(e) => setBackground(e.target.value)}
-                rows={9}
+                value={persona}
+                onChange={(e) => setPersona(e.target.value)}
+                rows={4}
                 className="w-full resize-none rounded-lg border border-border bg-background px-3 py-2 text-sm text-slate-200 placeholder-slate-600 focus:border-accent focus:outline-none"
-                placeholder="Paste your CV summary here…"
+                placeholder={getPreset(presetId).personaPlaceholder}
               />
             </div>
 
             <div>
               <label className="mb-1.5 block text-xs font-semibold uppercase tracking-wider text-slate-400">
-                Role type
+                About you
               </label>
-              <select
-                value={roleType}
-                onChange={(e) => setRoleType(e.target.value)}
-                className="w-full rounded-lg border border-border bg-background px-3 py-2 text-sm text-slate-200 focus:border-accent focus:outline-none"
-              >
-                {ROLE_TYPES.map((r) => (
-                  <option key={r}>{r}</option>
-                ))}
-              </select>
-            </div>
-
-            <div className="grid grid-cols-2 gap-3">
-              <div>
-                <label className="mb-1.5 block text-xs font-semibold uppercase tracking-wider text-slate-400">
-                  Goal
-                </label>
-                <select
-                  value={goal}
-                  onChange={(e) => setGoal(e.target.value as Goal)}
-                  className="w-full rounded-lg border border-border bg-background px-3 py-2 text-sm text-slate-200 focus:border-accent focus:outline-none"
-                >
-                  {GOALS.map((g) => (
-                    <option key={g.value} value={g.value}>
-                      {g.label}
-                    </option>
-                  ))}
-                </select>
-              </div>
-              <div>
-                <label className="mb-1.5 block text-xs font-semibold uppercase tracking-wider text-slate-400">
-                  Term
-                </label>
-                <select
-                  value={term}
-                  onChange={(e) => setTerm(e.target.value)}
-                  className="w-full rounded-lg border border-border bg-background px-3 py-2 text-sm text-slate-200 focus:border-accent focus:outline-none"
-                >
-                  {TERMS.map((t) => (
-                    <option key={t}>{t}</option>
-                  ))}
-                </select>
-              </div>
+              <textarea
+                value={background}
+                onChange={(e) => setBackground(e.target.value)}
+                rows={8}
+                className="w-full resize-none rounded-lg border border-border bg-background px-3 py-2 text-sm text-slate-200 placeholder-slate-600 focus:border-accent focus:outline-none"
+                placeholder="Who you are and why you are reaching out…"
+              />
             </div>
 
             <div>
-              <div className="mb-1.5 flex items-center justify-between">
-                <label className="text-xs font-semibold uppercase tracking-wider text-slate-400">
-                  Target companies
-                </label>
-                <span className="text-[10px] text-slate-500">{companies.length} selected</span>
-              </div>
-              <CompanyChips options={COMPANIES} selected={companies} onToggle={toggleCompany} />
+              <label className="mb-1.5 block text-xs font-semibold uppercase tracking-wider text-slate-400">
+                Goal
+              </label>
+              <input
+                type="text"
+                value={goal}
+                onChange={(e) => setGoal(e.target.value)}
+                className="w-full rounded-lg border border-border bg-background px-3 py-2 text-sm text-slate-200 placeholder-slate-600 focus:border-accent focus:outline-none"
+                placeholder="What do you want out of the outreach?"
+              />
+            </div>
+
+            <div>
+              <label className="mb-1.5 block text-xs font-semibold uppercase tracking-wider text-slate-400">
+                Focus organizations{' '}
+                <span className="text-[10px] normal-case text-slate-500">
+                  (optional, comma-separated)
+                </span>
+              </label>
+              <textarea
+                value={companiesText}
+                onChange={(e) => setCompaniesText(e.target.value)}
+                rows={3}
+                className="w-full resize-none rounded-lg border border-border bg-background px-3 py-2 text-sm text-slate-200 placeholder-slate-600 focus:border-accent focus:outline-none"
+                placeholder="Verily, Oscar Health, League… leave blank to cast a wide net"
+              />
+            </div>
+
+            <div>
+              <label className="mb-1.5 block text-xs font-semibold uppercase tracking-wider text-slate-400">
+                Region <span className="text-[10px] normal-case text-slate-500">(optional)</span>
+              </label>
+              <input
+                type="text"
+                value={region}
+                onChange={(e) => setRegion(e.target.value)}
+                className="w-full rounded-lg border border-border bg-background px-3 py-2 text-sm text-slate-200 placeholder-slate-600 focus:border-accent focus:outline-none"
+                placeholder="e.g. Toronto, Canada"
+              />
             </div>
 
             <div>
@@ -271,11 +265,7 @@ export default function Page() {
                 grounded={result.grounded}
                 warning={result.apifyWarning}
               />
-              <div className="grid grid-cols-1 gap-4 xl:grid-cols-2">
-                {sortedPeople.map((person, i) => (
-                  <PersonCard key={`${person.name}-${i}`} person={person} index={i} />
-                ))}
-              </div>
+              <PersonList people={sortedPeople} />
               <ProTips />
             </div>
           )}
@@ -291,8 +281,8 @@ function EmptyState() {
       <div className="mb-2 text-3xl">🎯</div>
       <h2 className="mb-1 text-lg font-semibold text-white">Ready when you are</h2>
       <p className="max-w-sm text-sm text-slate-400">
-        Fill in your background, pick target companies, and we will rank 6 specific people to reach
-        out to on LinkedIn — each with a ready-to-send message.
+        Pick a preset or describe who you want to reach, add your background and goal, and we will
+        rank specific people to contact on LinkedIn — each with a ready-to-send message.
       </p>
     </div>
   );

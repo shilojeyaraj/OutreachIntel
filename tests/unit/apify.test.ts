@@ -48,14 +48,14 @@ describe('searchLinkedInTargets', () => {
     delete process.env.APIFY_API_TOKEN;
     await expect(
       searchLinkedInTargets({
+        persona: 'health tech product managers',
         background: 'b',
-        companies: ['OpenAI'],
-        roleType: 'MLE Intern',
+        companies: ['Verily'],
       }),
     ).rejects.toThrow(/APIFY_API_TOKEN/);
   });
 
-  it('filters to linkedin.com/in URLs in organicResults', async () => {
+  it('filters to linkedin.com/in URLs and labels hits with the target org', async () => {
     process.env.APIFY_API_TOKEN = 'test-token';
 
     const fakeDataset = [
@@ -64,7 +64,7 @@ describe('searchLinkedInTargets', () => {
           { title: 'Real Person', url: 'https://www.linkedin.com/in/realperson', description: 'd' },
           {
             title: 'Company page',
-            url: 'https://www.linkedin.com/company/openai',
+            url: 'https://www.linkedin.com/company/verily',
             description: 'd',
           },
           { title: 'Blog post', url: 'https://example.com/blog', description: 'd' },
@@ -81,13 +81,50 @@ describe('searchLinkedInTargets', () => {
       ) as unknown as typeof fetch;
 
     const hits = await searchLinkedInTargets({
-      background: 'University of Waterloo CS',
-      companies: ['OpenAI'],
-      roleType: 'ML Engineer Intern',
+      persona: 'health tech product managers and founders',
+      background: 'University of Waterloo, moving into health tech PM',
+      companies: ['Verily'],
     });
 
     expect(hits).toHaveLength(1);
     expect(hits[0].url).toBe('https://www.linkedin.com/in/realperson');
-    expect(hits[0].company).toBe('OpenAI');
+    expect(hits[0].company).toBe('Verily');
+  });
+
+  it('builds a persona-driven query when no companies are given', async () => {
+    process.env.APIFY_API_TOKEN = 'test-token';
+
+    let sentBody: { queries?: string } = {};
+    global.fetch = jest.fn().mockImplementation((_url: string, init?: { body?: string }) => {
+      sentBody = init?.body ? JSON.parse(init.body) : {};
+      return Promise.resolve(
+        new Response(
+          JSON.stringify([
+            {
+              organicResults: [
+                {
+                  title: 'PM Person',
+                  url: 'https://www.linkedin.com/in/pmperson',
+                  description: 'd',
+                },
+              ],
+            },
+          ]),
+          { status: 200 },
+        ),
+      );
+    }) as unknown as typeof fetch;
+
+    const hits = await searchLinkedInTargets({
+      persona: 'health tech product managers and founders',
+      background: 'moving into health tech PM',
+      companies: [],
+      searchHints: '"product manager" OR founder',
+    });
+
+    expect(sentBody.queries).toContain('site:linkedin.com/in');
+    expect(sentBody.queries).toContain('product manager');
+    expect(hits).toHaveLength(1);
+    expect(hits[0].url).toBe('https://www.linkedin.com/in/pmperson');
   });
 });
