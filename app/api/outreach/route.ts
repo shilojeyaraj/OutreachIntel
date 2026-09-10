@@ -77,7 +77,6 @@ export async function POST(req: Request) {
     }
   }
 
-  const model = process.env.OPENROUTER_MODEL || 'openai/gpt-4o';
   const prompt = buildPrompt(body, { searchResults: searchResultsBlock });
 
   const headers: Record<string, string> = {
