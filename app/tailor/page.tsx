@@ -6,6 +6,7 @@ import ResumeOutput from '@/components/tailor/ResumeOutput';
 import QAReportPanel from '@/components/tailor/QAReportPanel';
 import type { TailorResponse, Tone } from '@/lib/tailor/types';
 import { VALID_TONES } from '@/lib/tailor/types';
+import { useStoredKey } from '@/lib/useStoredKey';
 
 // react-pdf cannot run during SSR.
 const CoverLetterOutput = dynamic(() => import('@/components/tailor/CoverLetterOutput'), {
@@ -20,7 +21,7 @@ export default function TailorPage() {
   const [company, setCompany] = useState('');
   const [description, setDescription] = useState('');
   const [tone, setTone] = useState<Tone>('warm');
-  const [apiKey, setApiKey] = useState('');
+  const [apiKey, setApiKey, clearApiKey] = useStoredKey('tailor:openrouterKey');
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [result, setResult] = useState<TailorResponse | null>(null);
@@ -112,11 +113,26 @@ export default function TailorPage() {
           </select>
           <input
             className="flex-1 rounded border p-2"
+            type="password"
+            autoComplete="off"
             placeholder="OpenRouter API key (optional if set on server)"
             value={apiKey}
-            onChange={(e) => setApiKey(e.target.value)}
+            onChange={(e) => setApiKey(e.target.value.trim())}
           />
+          {apiKey && (
+            <button
+              type="button"
+              onClick={clearApiKey}
+              className="text-xs text-gray-500 underline hover:text-red-600"
+            >
+              clear
+            </button>
+          )}
         </div>
+        <p className="text-xs text-gray-500">
+          The key is saved in this browser only (localStorage) and sent to this app&apos;s server per
+          request to call OpenRouter — never logged or shared.
+        </p>
         <button
           type="submit"
           disabled={loading}

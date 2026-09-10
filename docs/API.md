@@ -1,6 +1,6 @@
 # API reference
 
-ColdReach Intel exposes a single HTTP endpoint. All Anthropic / OpenRouter / Apify calls are server-side so secrets stay on the server.
+ColdReach Intel exposes a single HTTP endpoint. All Anthropic / OpenRouter / Apify calls are server-side. Keys come from the server environment, or from the request body when the caller supplies their own (`openrouterKey` / `apifyToken`); a body key takes precedence and is used only for that request.
 
 ## `POST /api/outreach`
 
@@ -18,6 +18,8 @@ Generate `count` LinkedIn outreach targets for a student.
   term: string;             // e.g. "Fall 2026"
   companies: string[];      // non-empty list of target companies
   count: number;            // integer in [3, 12]
+  openrouterKey?: string;   // caller's OpenRouter key; overrides server env for this request
+  apifyToken?: string;      // caller's Apify token; overrides server env for this request
 }
 ```
 
@@ -61,7 +63,7 @@ interface Person {
 | Status | Body                                                                     | When                                                               |
 | ------ | ------------------------------------------------------------------------ | ------------------------------------------------------------------ |
 | 400    | `{ "error": "<reason>" }`                                                | Validation failed or body was not valid JSON.                      |
-| 500    | `{ "error": "...OPENROUTER_API_KEY..." }`                                | Server is missing `OPENROUTER_API_KEY`.                            |
+| 400    | `{ "error": "OpenRouter key is required..." }`                           | No key in the request body (`openrouterKey`) or `OPENROUTER_API_KEY` env. |
 | 502    | `{ "error": "OpenRouter returned ..." }`                                 | Upstream LLM returned non-2xx.                                     |
 | 502    | `{ "error": "Failed to parse model output as JSON: ...", "raw": "..." }` | LLM returned unparsable content; `raw` is truncated to 1000 chars. |
 

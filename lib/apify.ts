@@ -22,6 +22,8 @@ export interface SearchOptions {
   roleType: string;
   resultsPerCompany?: number;
   timeoutMs?: number;
+  /** Apify token; falls back to APIFY_API_TOKEN when omitted. */
+  token?: string;
 }
 
 function buildQuery(company: string, background: string, roleType: string): string {
@@ -36,7 +38,7 @@ function buildQuery(company: string, background: string, roleType: string): stri
 }
 
 export async function searchLinkedInTargets(opts: SearchOptions): Promise<SearchHit[]> {
-  const token = process.env.APIFY_API_TOKEN;
+  const token = opts.token ?? process.env.APIFY_API_TOKEN;
   if (!token) {
     throw new Error('APIFY_API_TOKEN is not set');
   }

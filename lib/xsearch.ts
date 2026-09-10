@@ -45,6 +45,8 @@ export interface XTarget {
 export interface XSearchOptions {
   resultsPerPerson?: number;
   timeoutMs?: number;
+  /** Apify token; falls back to APIFY_API_TOKEN when omitted. */
+  token?: string;
 }
 
 export function buildXQuery(name: string, company: string): string {
@@ -115,7 +117,7 @@ export async function searchXHandles(
   targets: XTarget[],
   opts: XSearchOptions = {},
 ): Promise<XHit[][]> {
-  const token = process.env.APIFY_API_TOKEN;
+  const token = opts.token ?? process.env.APIFY_API_TOKEN;
   if (!token) throw new Error('APIFY_API_TOKEN is not set');
   if (targets.length === 0) return [];
 

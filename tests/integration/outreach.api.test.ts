@@ -52,12 +52,36 @@ describe('POST /api/outreach', () => {
     expect(body.error).toMatch(/background/i);
   });
 
-  it('returns 500 when OPENROUTER_API_KEY is missing', async () => {
+  it('returns 400 when no OpenRouter key is available (env or body)', async () => {
     delete process.env.OPENROUTER_API_KEY;
     const res = await POST(buildRequest(VALID_BODY));
-    expect(res.status).toBe(500);
+    expect(res.status).toBe(400);
     const body = await res.json();
-    expect(body.error).toMatch(/OPENROUTER_API_KEY/);
+    expect(body.error).toMatch(/OpenRouter key/i);
+  });
+
+  it('uses the OpenRouter key from the request body when env is unset', async () => {
+    delete process.env.OPENROUTER_API_KEY;
+    const fetchMock = jest.fn().mockResolvedValue(
+      new Response(
+        JSON.stringify({
+          choices: [
+            {
+              finish_reason: 'stop',
+              message: { content: JSON.stringify({ strategy: 's', people: [] }) },
+            },
+          ],
+        }),
+        { status: 200 },
+      ),
+    );
+    global.fetch = fetchMock as unknown as typeof fetch;
+
+    const res = await POST(buildRequest({ ...VALID_BODY, openrouterKey: 'sk-or-body-key' }));
+    expect(res.status).toBe(200);
+    const authHeader = (fetchMock.mock.calls[0][1] as { headers: Record<string, string> }).headers
+      .Authorization;
+    expect(authHeader).toBe('Bearer sk-or-body-key');
   });
 
   it('returns parsed payload when OpenRouter responds with valid JSON', async () => {

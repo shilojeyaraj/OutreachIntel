@@ -7,6 +7,10 @@ export interface OutreachInput {
   term: string;
   companies: string[];
   count: number;
+  // Optional per-request keys pasted into the UI. When absent the route falls
+  // back to the server environment (OPENROUTER_API_KEY / APIFY_API_TOKEN).
+  openrouterKey?: string;
+  apifyToken?: string;
 }
 
 export const MIN_TARGETS = 3;

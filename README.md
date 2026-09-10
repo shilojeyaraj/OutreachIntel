@@ -42,6 +42,22 @@ Open http://localhost:3000.
 | `OPENROUTER_SITE_NAME` | no          | —               | Sent as `X-Title` for OpenRouter attribution                                                                          |
 | `APIFY_API_TOKEN`      | recommended | —               | Without it the app still works but the model invents names. Get one at https://console.apify.com/account/integrations |
 
+### Bring your own key (no server env needed)
+
+Every page has API-key fields in the form. A key pasted there is saved in **that browser's `localStorage`** (so you paste it once) and sent to this app's server only to make the matching upstream call (OpenRouter / Apify / Anthropic) — never logged or persisted server-side. Use the **clear** link next to a field to wipe it.
+
+This lets someone use a shared deployment with their own keys without you setting any env vars. The request-body key always wins; the server env var is the fallback.
+
+Keys needed per page:
+
+| Page                 | Keys                                                        |
+| -------------------- | ---------------------------------------------------------- |
+| `/` ColdReach Intel  | OpenRouter (required) · Apify (optional, enables grounding) |
+| `/tailor`            | OpenRouter (required)                                       |
+| `/jobs` Job Finder   | Anthropic (required) · Apify (required)                     |
+
+Where to get them: OpenRouter → https://openrouter.ai/keys · Apify → https://console.apify.com/account/integrations · Anthropic → https://console.anthropic.com/settings/keys
+
 ## Features
 
 ### Job Finder (`/jobs`)

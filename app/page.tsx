@@ -6,6 +6,7 @@ import { CompanyChips } from '@/components/CompanyChips';
 import { StrategyBanner } from '@/components/StrategyBanner';
 import { LoadingSkeleton } from '@/components/LoadingSkeleton';
 import { PersonCard } from '@/components/PersonCard';
+import { useStoredKey } from '@/lib/useStoredKey';
 import {
   DEFAULT_TARGETS,
   MAX_TARGETS,
@@ -76,6 +77,11 @@ export default function Page() {
   const [companies, setCompanies] = useState<string[]>(DEFAULT_COMPANIES);
   const [count, setCount] = useState<number>(DEFAULT_TARGETS);
 
+  const [openrouterKey, setOpenrouterKey, clearOpenrouterKey] = useStoredKey(
+    'coldreach:openrouterKey',
+  );
+  const [apifyToken, setApifyToken, clearApifyToken] = useStoredKey('coldreach:apifyToken');
+
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [result, setResult] = useState<OutreachResponse | null>(null);
@@ -102,7 +108,16 @@ export default function Page() {
       const res = await fetch('/api/outreach', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ background, roleType, goal, term, companies, count }),
+        body: JSON.stringify({
+          background,
+          roleType,
+          goal,
+          term,
+          companies,
+          count,
+          ...(openrouterKey ? { openrouterKey } : {}),
+          ...(apifyToken ? { apifyToken } : {}),
+        }),
       });
       const data = await res.json();
       if (!res.ok) {
@@ -234,6 +249,62 @@ export default function Page() {
                 <span>{MIN_TARGETS} (focused)</span>
                 <span>{MAX_TARGETS} (broad)</span>
               </div>
+            </div>
+
+            <div className="space-y-2 border-t border-border pt-4">
+              <div>
+                <div className="mb-1 flex items-center justify-between">
+                  <label className="block text-[10px] font-semibold uppercase tracking-wider text-slate-500">
+                    OpenRouter API key
+                  </label>
+                  {openrouterKey && (
+                    <button
+                      type="button"
+                      onClick={clearOpenrouterKey}
+                      className="text-[10px] font-semibold text-slate-500 hover:text-red-400"
+                    >
+                      clear
+                    </button>
+                  )}
+                </div>
+                <input
+                  type="password"
+                  autoComplete="off"
+                  value={openrouterKey}
+                  onChange={(e) => setOpenrouterKey(e.target.value.trim())}
+                  placeholder="sk-or-v1-…"
+                  className="w-full rounded-lg border border-border bg-background px-3 py-1.5 text-xs text-slate-200 placeholder-slate-600 focus:border-accent focus:outline-none"
+                />
+              </div>
+              <div>
+                <div className="mb-1 flex items-center justify-between">
+                  <label className="block text-[10px] font-semibold uppercase tracking-wider text-slate-500">
+                    Apify token <span className="normal-case text-slate-600">(optional)</span>
+                  </label>
+                  {apifyToken && (
+                    <button
+                      type="button"
+                      onClick={clearApifyToken}
+                      className="text-[10px] font-semibold text-slate-500 hover:text-red-400"
+                    >
+                      clear
+                    </button>
+                  )}
+                </div>
+                <input
+                  type="password"
+                  autoComplete="off"
+                  value={apifyToken}
+                  onChange={(e) => setApifyToken(e.target.value.trim())}
+                  placeholder="apify_api_…"
+                  className="w-full rounded-lg border border-border bg-background px-3 py-1.5 text-xs text-slate-200 placeholder-slate-600 focus:border-accent focus:outline-none"
+                />
+              </div>
+              <p className="text-[10px] leading-relaxed text-slate-600">
+                Saved in this browser only (localStorage). Sent to this app&apos;s server per request
+                to call OpenRouter / Apify — never logged or shared. Leave blank to use the
+                server&apos;s own keys if configured.
+              </p>
             </div>
 
             <button

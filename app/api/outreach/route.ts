@@ -11,14 +11,6 @@ export const maxDuration = 120;
 const OPENROUTER_URL = 'https://openrouter.ai/api/v1/chat/completions';
 
 export async function POST(req: Request) {
-  const apiKey = process.env.OPENROUTER_API_KEY;
-  if (!apiKey) {
-    return NextResponse.json(
-      { error: 'Server is missing OPENROUTER_API_KEY. Add it to .env.local and restart.' },
-      { status: 500 },
-    );
-  }
-
   let body: OutreachInput;
   try {
     body = (await req.json()) as OutreachInput;
@@ -31,9 +23,19 @@ export async function POST(req: Request) {
     return NextResponse.json({ error: validationError }, { status: 400 });
   }
 
+  const apiKey = body.openrouterKey || process.env.OPENROUTER_API_KEY;
+  if (!apiKey) {
+    return NextResponse.json(
+      { error: 'OpenRouter key is required. Paste it into the form or set OPENROUTER_API_KEY.' },
+      { status: 400 },
+    );
+  }
+
+  const apifyToken = body.apifyToken || process.env.APIFY_API_TOKEN;
+
   let searchResultsBlock: string | undefined;
   let apifyWarning: string | undefined;
-  if (process.env.APIFY_API_TOKEN) {
+  if (apifyToken) {
     try {
       const hits = await searchLinkedInTargets({
         background: body.background,
@@ -41,6 +43,7 @@ export async function POST(req: Request) {
         roleType: body.roleType,
         resultsPerCompany: 8,
         timeoutMs: 60_000,
+        token: apifyToken,
       });
       searchResultsBlock = formatHitsForPrompt(hits);
     } catch (err) {
@@ -139,14 +142,14 @@ export async function POST(req: Request) {
     // grounding). This pass can never fail the request — on any error every
     // target simply keeps its x_query fallback.
     let xSearchWarning: string | undefined;
-    if (process.env.APIFY_API_TOKEN) {
+    if (apifyToken) {
       try {
         const xHits = await searchXHandles(
           parsed.people.map((p: { name: string; company: string }) => ({
             name: p.name,
             company: p.company,
           })),
-          { timeoutMs: 30_000 },
+          { timeoutMs: 30_000, token: apifyToken },
         );
         parsed.people.forEach(
           (

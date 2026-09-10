@@ -6,6 +6,7 @@ import { JobTable } from '@/components/jobs/JobTable';
 import { LoadingState } from '@/components/jobs/LoadingState';
 import { TagInput } from '@/components/jobs/TagInput';
 import type { JobSearchResponse, PostedWithin } from '@/lib/types';
+import { useStoredKey } from '@/lib/useStoredKey';
 
 const DEFAULT_QUERIES = [
   'Machine Learning Engineer Intern',
@@ -56,8 +57,8 @@ export default function JobsPage() {
   const [locations, setLocations] = useState<string[]>(DEFAULT_LOCATIONS);
   const [postedWithin, setPostedWithin] = useState<PostedWithin>('24h');
   const [minFitScore, setMinFitScore] = useState(6);
-  const [apifyKey, setApifyKey] = useState('');
-  const [anthropicKey, setAnthropicKey] = useState('');
+  const [apifyKey, setApifyKey, clearApifyKey] = useStoredKey('jobs:apifyKey');
+  const [anthropicKey, setAnthropicKey, clearAnthropicKey] = useStoredKey('jobs:anthropicKey');
 
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -202,31 +203,56 @@ export default function JobsPage() {
 
             <div className="space-y-2">
               <div>
-                <label className="mb-1 block text-[10px] font-semibold uppercase tracking-wider text-slate-500">
-                  Apify API key (optional if env set)
-                </label>
+                <div className="mb-1 flex items-center justify-between">
+                  <label className="block text-[10px] font-semibold uppercase tracking-wider text-slate-500">
+                    Apify API key (optional if env set)
+                  </label>
+                  {apifyKey && (
+                    <button
+                      type="button"
+                      onClick={clearApifyKey}
+                      className="text-[10px] font-semibold text-slate-500 hover:text-red-400"
+                    >
+                      clear
+                    </button>
+                  )}
+                </div>
                 <input
                   type="password"
+                  autoComplete="off"
                   value={apifyKey}
-                  onChange={(e) => setApifyKey(e.target.value)}
+                  onChange={(e) => setApifyKey(e.target.value.trim())}
                   placeholder="apify_api_…"
                   className="w-full rounded-lg border border-border bg-background px-3 py-1.5 text-xs text-slate-200 placeholder-slate-600 focus:border-accent focus:outline-none"
                 />
               </div>
               <div>
-                <label className="mb-1 block text-[10px] font-semibold uppercase tracking-wider text-slate-500">
-                  Anthropic API key (optional if env set)
-                </label>
+                <div className="mb-1 flex items-center justify-between">
+                  <label className="block text-[10px] font-semibold uppercase tracking-wider text-slate-500">
+                    Anthropic API key (optional if env set)
+                  </label>
+                  {anthropicKey && (
+                    <button
+                      type="button"
+                      onClick={clearAnthropicKey}
+                      className="text-[10px] font-semibold text-slate-500 hover:text-red-400"
+                    >
+                      clear
+                    </button>
+                  )}
+                </div>
                 <input
                   type="password"
+                  autoComplete="off"
                   value={anthropicKey}
-                  onChange={(e) => setAnthropicKey(e.target.value)}
+                  onChange={(e) => setAnthropicKey(e.target.value.trim())}
                   placeholder="sk-ant-…"
                   className="w-full rounded-lg border border-border bg-background px-3 py-1.5 text-xs text-slate-200 placeholder-slate-600 focus:border-accent focus:outline-none"
                 />
               </div>
-              <p className="text-[10px] text-slate-600">
-                Keys stay in memory only — never stored or sent anywhere besides this app.
+              <p className="text-[10px] leading-relaxed text-slate-600">
+                Saved in this browser only (localStorage). Sent to this app&apos;s server per request
+                to call Apify / Anthropic — never logged or shared.
               </p>
             </div>
 
