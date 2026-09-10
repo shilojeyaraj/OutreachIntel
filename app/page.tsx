@@ -6,12 +6,15 @@ import { CompanyChips } from '@/components/CompanyChips';
 import { StrategyBanner } from '@/components/StrategyBanner';
 import { LoadingSkeleton } from '@/components/LoadingSkeleton';
 import { PersonCard } from '@/components/PersonCard';
+import { BulkTable } from '@/components/BulkTable';
 import { useStoredKey } from '@/lib/useStoredKey';
+import { peopleToCsv } from '@/lib/csv';
 import { DEFAULT_VERTICAL, VERTICALS, getVertical, type VerticalId } from '@/lib/verticals';
 import {
   DEFAULT_TARGETS,
   MAX_TARGETS,
   MIN_TARGETS,
+  SINGLE_SHOT_MAX,
   type Goal,
   type OutreachResponse,
 } from '@/lib/types';
@@ -42,6 +45,9 @@ export default function Page() {
   const [term, setTerm] = useState(TERMS[0]);
   const [companies, setCompanies] = useState<string[]>(v.defaultCompanies);
   const [count, setCount] = useState<number>(DEFAULT_TARGETS);
+  const [rankWithAi, setRankWithAi] = useState(false);
+
+  const bulkMode = count > SINGLE_SHOT_MAX;
 
   function switchVertical(id: VerticalId) {
     if (id === vertical) return;
@@ -70,12 +76,16 @@ export default function Page() {
     setError(null);
     setResult(null);
 
-    if (companies.length === 0) {
+    if (!bulkMode && companies.length === 0) {
       setError('Pick at least one target company.');
       return;
     }
     if (background.trim().length < 20) {
       setError('Background needs at least 20 characters.');
+      return;
+    }
+    if (bulkMode && !apifyToken) {
+      setError('Bulk mode needs an Apify token (paste it below) — that is what finds real people.');
       return;
     }
 
@@ -89,9 +99,10 @@ export default function Page() {
           roleType,
           goal,
           term,
-          companies,
+          companies: bulkMode ? [] : companies,
           count,
           vertical,
+          ...(bulkMode ? { rankWithAi } : {}),
           ...(openrouterKey ? { openrouterKey } : {}),
           ...(apifyToken ? { apifyToken } : {}),
         }),
@@ -109,7 +120,27 @@ export default function Page() {
     }
   }
 
-  const sortedPeople = result ? [...result.people].sort((a, b) => b.score - a.score) : [];
+  const displayPeople = result
+    ? result.bulk
+      ? result.people
+      : [...result.people].sort((a, b) => b.score - a.score)
+    : [];
+  const bulkRanked = Boolean(result?.bulk && result.people.some((p) => p.why || p.tags.length));
+
+  function downloadCsv() {
+    if (!result) return;
+    const blob = new Blob([peopleToCsv(result.people)], { type: 'text/csv;charset=utf-8' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `outreach-${vertical}-${result.people.length}-${new Date()
+      .toISOString()
+      .slice(0, 10)}.csv`;
+    document.body.appendChild(a);
+    a.click();
+    a.remove();
+    URL.revokeObjectURL(url);
+  }
 
   return (
     <main className="min-h-screen">
@@ -216,9 +247,22 @@ export default function Page() {
                 <label className="text-xs font-semibold uppercase tracking-wider text-slate-400">
                   Target companies
                 </label>
-                <span className="text-[10px] text-slate-500">{companies.length} selected</span>
+                {!bulkMode && (
+                  <span className="text-[10px] text-slate-500">{companies.length} selected</span>
+                )}
               </div>
-              <CompanyChips options={v.companies} selected={companies} onToggle={toggleCompany} />
+              {bulkMode ? (
+                <p className="rounded-lg border border-dashed border-border bg-background/60 px-3 py-2 text-[11px] leading-relaxed text-slate-500">
+                  Bulk mode ignores the company filter — it sweeps every {v.label} company on the
+                  built-in list ({v.bulkCompanies.length}) plus broad category searches.
+                </p>
+              ) : (
+                <CompanyChips
+                  options={v.companies}
+                  selected={companies}
+                  onToggle={toggleCompany}
+                />
+              )}
             </div>
 
             <div>
@@ -226,9 +270,18 @@ export default function Page() {
                 <label className="text-xs font-semibold uppercase tracking-wider text-slate-400">
                   How many targets?
                 </label>
-                <span className="rounded-md bg-accent/15 px-2 py-0.5 text-xs font-semibold text-accent-hover">
-                  {count}
-                </span>
+                <input
+                  type="number"
+                  min={MIN_TARGETS}
+                  max={MAX_TARGETS}
+                  value={count}
+                  onChange={(e) => {
+                    const n = parseInt(e.target.value, 10);
+                    if (Number.isNaN(n)) return;
+                    setCount(Math.max(MIN_TARGETS, Math.min(MAX_TARGETS, n)));
+                  }}
+                  className="w-16 rounded-md border border-border bg-background px-2 py-0.5 text-right text-xs font-semibold text-accent-hover focus:border-accent focus:outline-none"
+                />
               </div>
               <input
                 type="range"
@@ -240,9 +293,27 @@ export default function Page() {
                 className="w-full accent-accent"
               />
               <div className="mt-1 flex justify-between text-[10px] text-slate-500">
-                <span>{MIN_TARGETS} (focused)</span>
-                <span>{MAX_TARGETS} (broad)</span>
+                <span>{MIN_TARGETS}</span>
+                <span>{SINGLE_SHOT_MAX} · curated ↑ / bulk ↓</span>
+                <span>{MAX_TARGETS}</span>
               </div>
+              {bulkMode && (
+                <div className="mt-3 space-y-2 rounded-lg border border-accent/30 bg-accent/5 p-3">
+                  <p className="text-[11px] leading-relaxed text-accent-hover">
+                    Bulk list mode: real LinkedIn profiles from live search, no drafted messages.
+                    Export CSV and hand it to Apollo.
+                  </p>
+                  <label className="flex items-center gap-2 text-[11px] text-slate-300">
+                    <input
+                      type="checkbox"
+                      checked={rankWithAi}
+                      onChange={(e) => setRankWithAi(e.target.checked)}
+                      className="accent-accent"
+                    />
+                    AI rank &amp; tag each profile (slower, uses OpenRouter)
+                  </label>
+                </div>
+              )}
             </div>
 
             <div className="space-y-2 border-t border-border pt-4">
@@ -273,7 +344,10 @@ export default function Page() {
               <div>
                 <div className="mb-1 flex items-center justify-between">
                   <label className="block text-[10px] font-semibold uppercase tracking-wider text-slate-500">
-                    Apify token <span className="normal-case text-slate-600">(optional)</span>
+                    Apify token{' '}
+                    <span className="normal-case text-slate-600">
+                      {bulkMode ? '(required for bulk)' : '(optional)'}
+                    </span>
                   </label>
                   {apifyToken && (
                     <button
@@ -307,7 +381,13 @@ export default function Page() {
               disabled={loading}
               className="w-full rounded-lg bg-accent px-4 py-2.5 text-sm font-semibold text-white shadow-lg shadow-accent/20 transition-colors hover:bg-accent-hover disabled:cursor-not-allowed disabled:opacity-60"
             >
-              {loading ? 'Generating targets…' : `Find ${count} outreach targets`}
+              {loading
+                ? bulkMode
+                  ? 'Harvesting profiles…'
+                  : 'Generating targets…'
+                : bulkMode
+                  ? `Harvest ${count} profiles`
+                  : `Find ${count} outreach targets`}
             </button>
 
             {error && (
@@ -323,8 +403,11 @@ export default function Page() {
           {loading && (
             <div className="space-y-3">
               <div className="rounded-lg border border-accent/30 bg-accent/5 px-4 py-2 text-xs text-accent-hover">
-                Running live LinkedIn search via Apify and ranking with GPT-4… this can take up to a
-                minute.
+                {bulkMode
+                  ? `Sweeping LinkedIn across ${v.bulkCompanies.length} ${v.label} companies via Apify${
+                      rankWithAi ? ' and AI-ranking in batches' : ''
+                    }… bulk runs can take a few minutes.`
+                  : 'Running live LinkedIn search via Apify and ranking with GPT-4… this can take up to a minute.'}
               </div>
               <LoadingSkeleton />
             </div>
@@ -334,14 +417,38 @@ export default function Page() {
               <StrategyBanner
                 strategy={result.strategy}
                 grounded={result.grounded}
-                warning={result.apifyWarning}
+                warning={result.apifyWarning || result.rankWarning}
               />
-              <div className="grid grid-cols-1 gap-4 xl:grid-cols-2">
-                {sortedPeople.map((person, i) => (
-                  <PersonCard key={`${person.name}-${i}`} person={person} index={i} />
-                ))}
-              </div>
-              <ProTips tips={v.proTips} />
+              {result.bulk ? (
+                <>
+                  <div className="flex flex-wrap items-center justify-between gap-3 rounded-lg border border-border bg-surface/60 px-4 py-2 text-xs text-slate-400">
+                    <span>
+                      Showing{' '}
+                      <span className="font-semibold text-slate-200">{result.people.length}</span> of{' '}
+                      <span className="font-semibold text-slate-200">{result.harvested ?? '—'}</span>{' '}
+                      harvested profiles
+                      {bulkRanked ? ' · AI-ranked' : ' · unranked (harvest order)'}
+                    </span>
+                    <button
+                      type="button"
+                      onClick={downloadCsv}
+                      className="rounded-md bg-accent px-3 py-1.5 text-xs font-semibold text-white hover:bg-accent-hover"
+                    >
+                      ↓ Download CSV
+                    </button>
+                  </div>
+                  <BulkTable people={displayPeople} ranked={bulkRanked} />
+                </>
+              ) : (
+                <>
+                  <div className="grid grid-cols-1 gap-4 xl:grid-cols-2">
+                    {displayPeople.map((person, i) => (
+                      <PersonCard key={`${person.name}-${i}`} person={person} index={i} />
+                    ))}
+                  </div>
+                  <ProTips tips={v.proTips} />
+                </>
+              )}
             </div>
           )}
         </section>
@@ -356,8 +463,8 @@ function EmptyState() {
       <div className="mb-2 text-3xl">🎯</div>
       <h2 className="mb-1 text-lg font-semibold text-white">Ready when you are</h2>
       <p className="max-w-sm text-sm text-slate-400">
-        Fill in your background, pick target companies, and we will rank 6 specific people to reach
-        out to on LinkedIn — each with a ready-to-send message.
+        Fill in your background and run it. Up to 12 targets = curated people with ready-to-send
+        messages. Set it higher for bulk mode — a big CSV of real profiles for Apollo.
       </p>
     </div>
   );

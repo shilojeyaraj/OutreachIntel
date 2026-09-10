@@ -119,6 +119,196 @@ export async function searchLinkedInTargets(opts: SearchOptions): Promise<Search
   return hits;
 }
 
+// --- Bulk harvest (Apollo-export path) -------------------------------------
+//
+// Instead of picking a handful of people, the bulk path scrapes as many real
+// `linkedin.com/in` results as it can across a wide company list, parses a
+// name/role/company out of each result title, and dedupes by profile URL.
+
+export interface HarvestQuery {
+  /** Full Google query string (already includes `site:linkedin.com/in`). */
+  q: string;
+  /** Company this query targets, if any — used when the title has no "at X". */
+  company?: string;
+}
+
+export interface HarvestedProfile {
+  name: string;
+  role: string;
+  company: string;
+  linkedin_url: string;
+  snippet: string;
+}
+
+export interface HarvestOptions {
+  queries: HarvestQuery[];
+  token?: string;
+  resultsPerPage?: number;
+  maxPagesPerQuery?: number;
+  /** Queries per Apify run — runs are sequential. */
+  batchSize?: number;
+  timeoutMsPerBatch?: number;
+}
+
+const TITLE_TAIL_RE =
+  /\s*[|\-–—]\s*(LinkedIn|Professional Profile|LinkedIn.*)\s*$/i;
+const NAME_OK_RE = /^[\p{L}][\p{L} .'’-]{1,60}$/u;
+
+/** Pull a person out of a LinkedIn SERP hit, or null if the title is unusable. */
+export function parseProfileFromHit(
+  hit: { title: string; url: string; description: string },
+  fallbackCompany = '',
+): HarvestedProfile | null {
+  const url = normalizeProfileUrl(hit.url);
+  if (!url) return null;
+
+  const cleaned = hit.title.replace(TITLE_TAIL_RE, '').trim();
+  const parts = cleaned
+    .split(/\s+[|\-–—]\s+|\s+·\s+/)
+    .map((p) => p.trim())
+    .filter(Boolean);
+  if (parts.length === 0) return null;
+
+  const name = parts[0].replace(/\s+/g, ' ').trim();
+  if (!NAME_OK_RE.test(name) || name.split(' ').length > 5) return null;
+
+  let role = '';
+  let company = fallbackCompany;
+  const rest = parts.slice(1);
+
+  if (rest.length >= 2) {
+    // "Name - Role - Company"  ->  role is everything between, company is last.
+    role = rest.slice(0, -1).join(' - ').trim();
+    company = rest[rest.length - 1].trim() || fallbackCompany;
+  } else if (rest.length === 1) {
+    const atMatch = rest[0].split(/\s+\bat\b\s+/i);
+    if (atMatch.length >= 2) {
+      role = atMatch[0].trim();
+      company = atMatch.slice(1).join(' at ').trim() || fallbackCompany;
+    } else {
+      role = rest[0].trim();
+    }
+  }
+
+  return {
+    name,
+    role: role.slice(0, 120),
+    company: company.slice(0, 80),
+    linkedin_url: url,
+    snippet: hit.description.replace(/\s+/g, ' ').trim().slice(0, 240),
+  };
+}
+
+function normalizeProfileUrl(raw: string): string | null {
+  if (typeof raw !== 'string' || !raw.includes('linkedin.com/in/')) return null;
+  try {
+    const u = new URL(raw);
+    const seg = u.pathname.split('/').filter(Boolean); // ['in', '<slug>', ...]
+    if (seg.length < 2 || seg[0] !== 'in' || !seg[1]) return null;
+    return `https://www.linkedin.com/in/${seg[1].toLowerCase()}`;
+  } catch {
+    return null;
+  }
+}
+
+function chunk<T>(arr: T[], size: number): T[][] {
+  const out: T[][] = [];
+  for (let i = 0; i < arr.length; i += size) out.push(arr.slice(i, i + size));
+  return out;
+}
+
+export async function harvestProfiles(opts: HarvestOptions): Promise<HarvestedProfile[]> {
+  const token = opts.token ?? process.env.APIFY_API_TOKEN;
+  if (!token) throw new Error('APIFY_API_TOKEN is not set');
+  if (opts.queries.length === 0) return [];
+
+  const resultsPerPage = opts.resultsPerPage ?? 20;
+  const maxPagesPerQuery = opts.maxPagesPerQuery ?? 1;
+  const batchSize = opts.batchSize ?? 20;
+  const timeoutMs = opts.timeoutMsPerBatch ?? 90_000;
+
+  const byUrl = new Map<string, HarvestedProfile>();
+
+  for (const batch of chunk(opts.queries, batchSize)) {
+    const url = `https://api.apify.com/v2/acts/${APIFY_ACTOR}/run-sync-get-dataset-items?token=${encodeURIComponent(
+      token,
+    )}&timeout=${Math.floor(timeoutMs / 1000)}`;
+
+    const controller = new AbortController();
+    const timer = setTimeout(() => controller.abort(), timeoutMs);
+    let res: Response;
+    try {
+      res = await fetch(url, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        signal: controller.signal,
+        body: JSON.stringify({
+          queries: batch.map((b) => b.q).join('\n'),
+          resultsPerPage,
+          maxPagesPerQuery,
+          countryCode: 'us',
+          languageCode: 'en',
+          mobileResults: false,
+          saveHtml: false,
+          saveHtmlToKeyValueStore: false,
+          includeUnfilteredResults: false,
+        }),
+      });
+    } finally {
+      clearTimeout(timer);
+    }
+
+    if (!res.ok) {
+      const errText = await res.text().catch(() => '');
+      throw new Error(`Apify returned ${res.status}: ${errText.slice(0, 300)}`);
+    }
+
+    const items = (await res.json()) as unknown;
+    if (!Array.isArray(items)) continue;
+
+    items.forEach((item, idx) => {
+      if (!item || typeof item !== 'object') return;
+      const fallbackCompany = batch[idx]?.company ?? '';
+      const organic = Array.isArray((item as Record<string, unknown>).organicResults)
+        ? ((item as Record<string, unknown>).organicResults as unknown[])
+        : [];
+      for (const raw of organic) {
+        if (!raw || typeof raw !== 'object') continue;
+        const h = raw as Record<string, unknown>;
+        const profile = parseProfileFromHit(
+          {
+            title: typeof h.title === 'string' ? h.title : '',
+            url: typeof h.url === 'string' ? h.url : '',
+            description: typeof h.description === 'string' ? h.description : '',
+          },
+          fallbackCompany,
+        );
+        if (profile && !byUrl.has(profile.linkedin_url)) {
+          byUrl.set(profile.linkedin_url, profile);
+        }
+      }
+    });
+  }
+
+  return [...byUrl.values()];
+}
+
+/** Build the harvest query set for a vertical: one per company + category nets. */
+export function buildHarvestQueries(
+  companies: string[],
+  categoryTerms: string[],
+  roleHint: string,
+): HarvestQuery[] {
+  const queries: HarvestQuery[] = companies.map((c) => ({
+    q: `site:linkedin.com/in "${c}" (${roleHint})`,
+    company: c,
+  }));
+  for (const term of categoryTerms) {
+    queries.push({ q: `site:linkedin.com/in "${term}"` });
+  }
+  return queries;
+}
+
 export function formatHitsForPrompt(hits: SearchHit[]): string {
   if (hits.length === 0) return '(no live search results — fall back to general knowledge)';
   return hits

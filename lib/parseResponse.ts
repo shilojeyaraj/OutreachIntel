@@ -112,12 +112,12 @@ function validateResponse(data: unknown): OutreachResponse {
       company: String(person.company ?? ''),
       role: String(person.role ?? ''),
       why: String(person.why ?? ''),
-      hook: String(person.hook ?? ''),
+      hook: person.hook ? String(person.hook) : undefined,
       score: clampScore(person.score),
       tags: Array.isArray(person.tags) ? person.tags.map(String) : [],
       linkedin_query: String(person.linkedin_query ?? ''),
       linkedin_url: normalizeLinkedInUrl(person.linkedin_url),
-      message: String(person.message ?? ''),
+      message: person.message ? String(person.message) : undefined,
     };
   });
 

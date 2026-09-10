@@ -4,7 +4,13 @@
  * The Apify client uses the Web `Response` global (Node 18+). jsdom doesn't
  * polyfill it, so this file opts into the node environment.
  */
-import { formatHitsForPrompt, searchLinkedInTargets, type SearchHit } from '@/lib/apify';
+import {
+  buildHarvestQueries,
+  formatHitsForPrompt,
+  parseProfileFromHit,
+  searchLinkedInTargets,
+  type SearchHit,
+} from '@/lib/apify';
 
 describe('formatHitsForPrompt', () => {
   it('returns a fallback string when there are no hits', () => {
@@ -26,6 +32,77 @@ describe('formatHitsForPrompt', () => {
     expect(out).not.toContain('| LinkedIn');
     // Description whitespace is collapsed so the prompt stays compact.
     expect(out).toContain('University of Waterloo alumni recruiter.');
+  });
+});
+
+describe('parseProfileFromHit', () => {
+  it('splits "Name - Role - Company | LinkedIn" into fields', () => {
+    const p = parseProfileFromHit({
+      title: 'Jane Doe - Senior Product Manager - Verily | LinkedIn',
+      url: 'https://www.linkedin.com/in/janedoe',
+      description: 'Building clinical tools.',
+    });
+    expect(p).toEqual({
+      name: 'Jane Doe',
+      role: 'Senior Product Manager',
+      company: 'Verily',
+      linkedin_url: 'https://www.linkedin.com/in/janedoe',
+      snippet: 'Building clinical tools.',
+    });
+  });
+
+  it('handles "Name – Role at Company" and normalizes the profile URL', () => {
+    const p = parseProfileFromHit(
+      {
+        title: 'John Smith – Product Lead at Epic Systems | LinkedIn',
+        url: 'https://linkedin.com/in/JohnSmith/?originalSubdomain=ca',
+        description: '',
+      },
+      'fallback co',
+    );
+    expect(p?.name).toBe('John Smith');
+    expect(p?.role).toBe('Product Lead');
+    expect(p?.company).toBe('Epic Systems');
+    expect(p?.linkedin_url).toBe('https://www.linkedin.com/in/johnsmith');
+  });
+
+  it('uses the fallback company when the title has no company', () => {
+    const p = parseProfileFromHit(
+      { title: 'Amy Lin | LinkedIn', url: 'https://www.linkedin.com/in/amylin', description: '' },
+      'Tempus',
+    );
+    expect(p?.name).toBe('Amy Lin');
+    expect(p?.company).toBe('Tempus');
+  });
+
+  it('rejects non-profile URLs and junk titles', () => {
+    expect(
+      parseProfileFromHit({
+        title: 'Product Manager jobs | LinkedIn',
+        url: 'https://www.linkedin.com/jobs/product-manager',
+        description: '',
+      }),
+    ).toBeNull();
+    expect(
+      parseProfileFromHit({
+        title: '10 tips for PMs in 2026',
+        url: 'https://www.linkedin.com/in/someone',
+        description: '',
+      }),
+    ).toBeNull();
+  });
+});
+
+describe('buildHarvestQueries', () => {
+  it('makes one company-tagged query each plus a category net per term', () => {
+    const qs = buildHarvestQueries(['Epic', 'Verily'], ['digital health pm'], 'product manager');
+    expect(qs).toHaveLength(3);
+    expect(qs[0]).toEqual({
+      q: 'site:linkedin.com/in "Epic" (product manager)',
+      company: 'Epic',
+    });
+    expect(qs[2].company).toBeUndefined();
+    expect(qs[2].q).toContain('"digital health pm"');
   });
 });
 

@@ -86,12 +86,14 @@ export function PersonCard({ person, index }: Props) {
         <p className="text-sm leading-relaxed text-slate-300">{person.why}</p>
       </div>
 
-      <div className="rounded-lg border border-accent/30 bg-accent/5 p-3">
-        <div className="mb-1 text-[10px] font-semibold uppercase tracking-wider text-accent-hover">
-          Hook
+      {person.hook && (
+        <div className="rounded-lg border border-accent/30 bg-accent/5 p-3">
+          <div className="mb-1 text-[10px] font-semibold uppercase tracking-wider text-accent-hover">
+            Hook
+          </div>
+          <p className="text-sm leading-relaxed text-slate-200">{person.hook}</p>
         </div>
-        <p className="text-sm leading-relaxed text-slate-200">{person.hook}</p>
-      </div>
+      )}
 
       <div>
         <div className="mb-1 flex items-center justify-between">
@@ -156,27 +158,29 @@ export function PersonCard({ person, index }: Props) {
         )}
       </div>
 
-      <div>
-        <div className="mb-1 flex items-center justify-between">
-          <div className="text-[10px] font-semibold uppercase tracking-wider text-slate-500">
-            Message
+      {person.message && (
+        <div>
+          <div className="mb-1 flex items-center justify-between">
+            <div className="text-[10px] font-semibold uppercase tracking-wider text-slate-500">
+              Message
+            </div>
+            <button
+              type="button"
+              onClick={() => copy(person.message!, 'message')}
+              className={`rounded-md border px-2 py-1 text-[10px] font-medium transition-colors ${
+                copiedField === 'message'
+                  ? 'border-green-500/40 bg-green-500/10 text-green-300'
+                  : 'border-border bg-surface-hover text-slate-300 hover:border-accent hover:text-white'
+              }`}
+            >
+              {copiedField === 'message' ? '✓ Copied' : 'Copy message'}
+            </button>
           </div>
-          <button
-            type="button"
-            onClick={() => copy(person.message, 'message')}
-            className={`rounded-md border px-2 py-1 text-[10px] font-medium transition-colors ${
-              copiedField === 'message'
-                ? 'border-green-500/40 bg-green-500/10 text-green-300'
-                : 'border-border bg-surface-hover text-slate-300 hover:border-accent hover:text-white'
-            }`}
-          >
-            {copiedField === 'message' ? '✓ Copied' : 'Copy message'}
-          </button>
+          <p className="whitespace-pre-wrap rounded-lg border border-border bg-background px-3 py-2.5 text-sm leading-relaxed text-slate-200">
+            {person.message}
+          </p>
         </div>
-        <p className="whitespace-pre-wrap rounded-lg border border-border bg-background px-3 py-2.5 text-sm leading-relaxed text-slate-200">
-          {person.message}
-        </p>
-      </div>
+      )}
     </div>
   );
 }

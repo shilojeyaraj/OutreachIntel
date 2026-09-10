@@ -20,6 +20,18 @@ A toggle in the header switches the outreach vertical. Each vertical swaps the c
 - **AI / ML** (default) — AI labs, ML/SWE intern roles, prioritizes alumni + former interns + MLEs.
 - **Health tech** — digital-health companies (Epic, Verily, Tempus, Abridge…), PM / APM / founder roles, prioritizes health-tech founders, PMs who broke in non-traditionally, and clinicians who moved into product.
 
+### Bulk list mode (Apollo export)
+
+Set the target count above **12** and the main page switches to bulk mode:
+
+- **No company filter** — it sweeps a wide built-in list for the active vertical (~30–90 companies) plus broad category searches, so you get people at every kind of company, not just ones you picked.
+- **No drafted messages** — rows are just name / title / company / LinkedIn URL. Apollo writes the outreach.
+- **Requires an Apify token** (that's what finds real profiles). Results are deduped by profile URL.
+- **Optional "AI rank & tag"** checkbox — scores and tags every row in batches via OpenRouter. Off by default (faster, cheaper).
+- **Download CSV** button on the results — columns: `name,title,company,linkedin_url,score,tags,why,snippet`. Import straight into Apollo for email enrichment + auto-sequences.
+
+Up to 250 rows per run. Large runs can take a few minutes (`maxDuration` on `/api/outreach` is 300s — needs a Vercel Pro plan).
+
 ## Stack
 
 - Next.js 14 (App Router)

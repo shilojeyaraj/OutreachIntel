@@ -16,46 +16,57 @@ Generate `count` LinkedIn outreach targets for a student.
   roleType: string;         // e.g. "Machine Learning Engineer Intern"
   goal: "referral" | "advice" | "both" | "coffee";
   term: string;             // e.g. "Fall 2026"
-  companies: string[];      // non-empty list of target companies
-  count: number;            // integer in [3, 12]
+  companies: string[];      // target companies; ignored when count > 12 (bulk mode)
+  count: number;            // integer in [3, 250]
   vertical?: "ai-ml" | "health-tech";  // preset + prompt-priority set; default "ai-ml"
+  rankWithAi?: boolean;     // bulk mode only: batch-score + tag every harvested row
   openrouterKey?: string;   // caller's OpenRouter key; overrides server env for this request
   apifyToken?: string;      // caller's Apify token; overrides server env for this request
 }
 ```
 
+#### Two modes, chosen by `count`
+
+- **`count` ≤ 12 — curated.** LLM picks that many people, each with a drafted `message` and `hook`. Optional Apify grounding + X-handle enrichment. Needs an OpenRouter key.
+- **`count` > 12 — bulk (Apollo export).** Ignores `companies`; harvests real `linkedin.com/in` results across the vertical's built-in company list + category searches, dedupes by profile URL, returns up to `count` rows with **no** `message`/`hook`. **Requires an Apify token.** OpenRouter key only needed if `rankWithAi` is true.
+
 #### Validation rules
 
-| Field        | Rule                                                                |
-| ------------ | ------------------------------------------------------------------- |
-| `background` | string, length ≥ 20 after trim                                      |
-| `roleType`   | non-empty string                                                    |
-| `goal`       | one of `referral`, `advice`, `both`, `coffee`                       |
-| `term`       | non-empty string                                                    |
-| `companies`  | non-empty array of strings                                          |
-| `count`      | integer between `MIN_TARGETS` (3) and `MAX_TARGETS` (12), inclusive |
+| Field        | Rule                                                                    |
+| ------------ | --------------------------------------------------------------------- |
+| `background` | string, length ≥ 20 after trim                                        |
+| `roleType`   | non-empty string                                                      |
+| `goal`       | one of `referral`, `advice`, `both`, `coffee`                         |
+| `term`       | non-empty string                                                      |
+| `companies`  | non-empty array of strings — **only when `count` ≤ 12**               |
+| `count`      | integer between `MIN_TARGETS` (3) and `MAX_TARGETS` (250), inclusive  |
+| `rankWithAi` | boolean, if present                                                  |
 
 ### Response — `200 OK`
 
 ```ts
 {
-  strategy: string;             // 2-3 sentence overall strategy
-  people: Person[];             // length === count
-  grounded?: true;              // present only when Apify search succeeded
-  apifyWarning?: string;        // present when Apify was configured but failed
+  strategy: string;             // 2-3 sentence summary of what was returned
+  people: Person[];
+  grounded?: true;              // Apify search / harvest succeeded
+  bulk?: true;                  // came from the bulk path (table + CSV, no messages)
+  harvested?: number;           // bulk: unique profiles found before truncating to count
+  apifyWarning?: string;        // curated: Apify configured but failed
+  rankWarning?: string;         // bulk: one or more AI-ranking batches failed
 }
 
 interface Person {
   name: string;
   company: string;
   role: string;
-  why: string;
-  hook: string;
-  score: number;                // integer 1-10
-  tags: string[];               // 2-3 short labels
+  why: string;                  // "" on unranked bulk rows
+  score: number;                // integer 1-10 (5 on unranked bulk rows)
+  tags: string[];               // [] on unranked bulk rows
   linkedin_query: string;       // backup LinkedIn search string
   linkedin_url?: string;        // full profile URL when grounded
-  message: string;              // < 120 words, personalized
+  hook?: string;                // curated path only
+  message?: string;             // curated path only — < 120 words, personalized
+  snippet?: string;             // bulk path — first line of the search result
 }
 ```
 

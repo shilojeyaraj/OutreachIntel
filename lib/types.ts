@@ -12,6 +12,9 @@ export interface OutreachInput {
   // Which outreach vertical the presets + prompt priorities come from.
   // Defaults to 'ai-ml' when omitted (see lib/verticals.ts).
   vertical?: import('./verticals').VerticalId;
+  // When true (only meaningful for bulk requests) each harvested profile is
+  // scored + tagged by the LLM in batches. Off = raw harvested list, faster.
+  rankWithAi?: boolean;
   // Optional per-request keys pasted into the UI. When absent the route falls
   // back to the server environment (OPENROUTER_API_KEY / APIFY_API_TOKEN).
   openrouterKey?: string;
@@ -19,20 +22,27 @@ export interface OutreachInput {
 }
 
 export const MIN_TARGETS = 3;
-export const MAX_TARGETS = 12;
+/** Largest list the bulk (Apollo-export) path will return. */
+export const MAX_TARGETS = 250;
+/** Above this the route switches from the curated single-shot path to bulk. */
+export const SINGLE_SHOT_MAX = 12;
 export const DEFAULT_TARGETS = 6;
+export const DEFAULT_BULK_TARGETS = 60;
 
 export interface Person {
   name: string;
   company: string;
   role: string;
   why: string;
-  hook: string;
   score: number;
   tags: string[];
   linkedin_query: string;
   linkedin_url?: string;
-  message: string;
+  // Present only on the curated (<= SINGLE_SHOT_MAX) path. Bulk rows omit them.
+  hook?: string;
+  message?: string;
+  // First line of the LinkedIn search snippet — bulk rows keep this for context.
+  snippet?: string;
   // X (Twitter) enrichment. x_query is always populated by the route; x_handle
   // and x_url are set only when a real profile is found and the name matches.
   x_handle?: string;
@@ -44,8 +54,13 @@ export interface OutreachResponse {
   strategy: string;
   people: Person[];
   grounded?: boolean;
+  /** True when this came from the bulk harvest path (table + CSV, no messages). */
+  bulk?: boolean;
+  /** Bulk: how many unique profiles were harvested before truncating to count. */
+  harvested?: number;
   apifyWarning?: string;
   xSearchWarning?: string;
+  rankWarning?: string;
 }
 
 export interface ApiError {
