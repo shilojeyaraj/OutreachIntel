@@ -41,6 +41,7 @@ export async function POST(req: Request) {
         background: body.background,
         companies: body.companies,
         roleType: body.roleType,
+        vertical: body.vertical,
         resultsPerCompany: 8,
         timeoutMs: 60_000,
         token: apifyToken,
@@ -206,6 +207,9 @@ function validateInput(input: Partial<OutreachInput> | null | undefined): string
   const count = Number(input.count);
   if (!Number.isInteger(count) || count < MIN_TARGETS || count > MAX_TARGETS) {
     return `count must be an integer between ${MIN_TARGETS} and ${MAX_TARGETS}`;
+  }
+  if (input.vertical !== undefined && !['ai-ml', 'health-tech'].includes(input.vertical)) {
+    return 'vertical must be one of: ai-ml, health-tech';
   }
   return null;
 }

@@ -18,6 +18,7 @@ Generate `count` LinkedIn outreach targets for a student.
   term: string;             // e.g. "Fall 2026"
   companies: string[];      // non-empty list of target companies
   count: number;            // integer in [3, 12]
+  vertical?: "ai-ml" | "health-tech";  // preset + prompt-priority set; default "ai-ml"
   openrouterKey?: string;   // caller's OpenRouter key; overrides server env for this request
   apifyToken?: string;      // caller's Apify token; overrides server env for this request
 }

@@ -7,6 +7,7 @@ import { StrategyBanner } from '@/components/StrategyBanner';
 import { LoadingSkeleton } from '@/components/LoadingSkeleton';
 import { PersonCard } from '@/components/PersonCard';
 import { useStoredKey } from '@/lib/useStoredKey';
+import { DEFAULT_VERTICAL, VERTICALS, getVertical, type VerticalId } from '@/lib/verticals';
 import {
   DEFAULT_TARGETS,
   MAX_TARGETS,
@@ -14,35 +15,6 @@ import {
   type Goal,
   type OutreachResponse,
 } from '@/lib/types';
-
-const COMPANIES = [
-  'Google / DeepMind',
-  'Meta AI',
-  'OpenAI',
-  'Anthropic',
-  'Microsoft / MSR',
-  'Amazon / AWS',
-  'Nvidia',
-  'Apple',
-  'Cohere',
-  'Hugging Face',
-  'Mistral AI',
-  'Shopify',
-  'Databricks',
-  'Scale AI',
-  'Waymo',
-  'xAI',
-] as const;
-
-const DEFAULT_COMPANIES = ['Google / DeepMind', 'Meta AI', 'OpenAI', 'Anthropic', 'Nvidia'];
-
-const ROLE_TYPES = [
-  'Machine Learning Engineer Intern',
-  'Software Engineer Intern',
-  'AI Research Intern',
-  'Applied Scientist Intern',
-  'ML Infrastructure Intern',
-];
 
 const GOALS: { value: Goal; label: string }[] = [
   { value: 'referral', label: 'Referral for an internship' },
@@ -53,29 +25,33 @@ const GOALS: { value: Goal; label: string }[] = [
 
 const TERMS = ['Fall 2026', 'Winter 2027', 'Summer 2027'];
 
-const DEFAULT_BACKGROUND = `2nd year Mechatronics Engineering @ University of Waterloo, pursuing AI specialization.
-Currently MLE intern @ Cohere Labs (PyTorch, LoRA, LLM inference optimization) and ML Engineering Intern @ biotech AI lab (LangGraph multi-agent systems, RAG, pgvector).
-Previous founding engineer at FinTech startup (FastAPI, PostgreSQL, WebSockets, RAG pipeline).
-Strong in Python, C++, TypeScript, PyTorch, LangChain.
-Built GPU Training Autotuner with NVML/CUDA C++ bindings.
-Won 2nd place at NexHacks 2026 @ CMU for a real-time Polymarket intelligence Chrome extension.`;
+const VERTICAL_IDS = Object.keys(VERTICALS) as VerticalId[];
 
-const PRO_TIPS = [
-  'Personalize every message — find one specific detail from their actual LinkedIn before sending.',
-  'Best send times: Tuesday–Thursday, 8–10am or 6–8pm in their timezone.',
-  'Send connection request + note simultaneously (LinkedIn note limit: 300 chars).',
-  'One follow-up after 7 days max — keep it short.',
-  'UWaterloo alumni respond at ~3× the rate of cold strangers for Waterloo students.',
-  'Former interns (1–3 years out) have the highest referral conversion rate — they remember how they got in.',
-];
+/** True when `text` is still one of the verticals' untouched default blurbs. */
+function isPristineBackground(text: string): boolean {
+  return VERTICAL_IDS.some((id) => VERTICALS[id].defaultBackground === text);
+}
 
 export default function Page() {
-  const [background, setBackground] = useState(DEFAULT_BACKGROUND);
-  const [roleType, setRoleType] = useState(ROLE_TYPES[0]);
+  const [vertical, setVertical] = useState<VerticalId>(DEFAULT_VERTICAL);
+  const v = getVertical(vertical);
+
+  const [background, setBackground] = useState(v.defaultBackground);
+  const [roleType, setRoleType] = useState(v.roleTypes[0]);
   const [goal, setGoal] = useState<Goal>('both');
   const [term, setTerm] = useState(TERMS[0]);
-  const [companies, setCompanies] = useState<string[]>(DEFAULT_COMPANIES);
+  const [companies, setCompanies] = useState<string[]>(v.defaultCompanies);
   const [count, setCount] = useState<number>(DEFAULT_TARGETS);
+
+  function switchVertical(id: VerticalId) {
+    if (id === vertical) return;
+    const next = getVertical(id);
+    setVertical(id);
+    setCompanies(next.defaultCompanies);
+    setRoleType(next.roleTypes[0]);
+    // Only overwrite the background if the user has not typed their own.
+    setBackground((prev) => (isPristineBackground(prev) ? next.defaultBackground : prev));
+  }
 
   const [openrouterKey, setOpenrouterKey, clearOpenrouterKey] = useStoredKey(
     'coldreach:openrouterKey',
@@ -115,6 +91,7 @@ export default function Page() {
           term,
           companies,
           count,
+          vertical,
           ...(openrouterKey ? { openrouterKey } : {}),
           ...(apifyToken ? { apifyToken } : {}),
         }),
@@ -145,10 +122,27 @@ export default function Page() {
             </p>
           </div>
           <div className="flex items-center gap-4 text-xs text-slate-500">
+            <div className="flex rounded-lg border border-border bg-background p-0.5">
+              {VERTICAL_IDS.map((id) => (
+                <button
+                  key={id}
+                  type="button"
+                  onClick={() => switchVertical(id)}
+                  className={[
+                    'rounded-md px-2.5 py-1 text-xs font-semibold transition-colors',
+                    id === vertical
+                      ? 'bg-accent text-white'
+                      : 'text-slate-400 hover:text-white',
+                  ].join(' ')}
+                >
+                  {VERTICALS[id].label}
+                </button>
+              ))}
+            </div>
             <Link href="/jobs" className="font-semibold text-accent-hover hover:text-white">
               Job Finder →
             </Link>
-            <span>OpenRouter · GPT-4 · Apify Live Search</span>
+            <span className="hidden lg:inline">{v.tagline}</span>
           </div>
         </div>
       </header>
@@ -178,7 +172,7 @@ export default function Page() {
                 onChange={(e) => setRoleType(e.target.value)}
                 className="w-full rounded-lg border border-border bg-background px-3 py-2 text-sm text-slate-200 focus:border-accent focus:outline-none"
               >
-                {ROLE_TYPES.map((r) => (
+                {v.roleTypes.map((r) => (
                   <option key={r}>{r}</option>
                 ))}
               </select>
@@ -224,7 +218,7 @@ export default function Page() {
                 </label>
                 <span className="text-[10px] text-slate-500">{companies.length} selected</span>
               </div>
-              <CompanyChips options={COMPANIES} selected={companies} onToggle={toggleCompany} />
+              <CompanyChips options={v.companies} selected={companies} onToggle={toggleCompany} />
             </div>
 
             <div>
@@ -347,7 +341,7 @@ export default function Page() {
                   <PersonCard key={`${person.name}-${i}`} person={person} index={i} />
                 ))}
               </div>
-              <ProTips />
+              <ProTips tips={v.proTips} />
             </div>
           )}
         </section>
@@ -369,14 +363,14 @@ function EmptyState() {
   );
 }
 
-function ProTips() {
+function ProTips({ tips }: { tips: string[] }) {
   return (
     <div className="rounded-xl border border-border bg-surface p-5">
       <h3 className="mb-3 text-xs font-semibold uppercase tracking-wider text-accent-hover">
         Pro tips
       </h3>
       <ul className="space-y-2 text-sm text-slate-300">
-        {PRO_TIPS.map((tip) => (
+        {tips.map((tip) => (
           <li key={tip} className="flex gap-2">
             <span className="mt-1 inline-block h-1.5 w-1.5 shrink-0 rounded-full bg-accent" />
             <span>{tip}</span>

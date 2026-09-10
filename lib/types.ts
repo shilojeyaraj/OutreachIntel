@@ -1,5 +1,7 @@
 export type Goal = 'referral' | 'advice' | 'both' | 'coffee';
 
+export type { VerticalId } from './verticals';
+
 export interface OutreachInput {
   background: string;
   roleType: string;
@@ -7,6 +9,9 @@ export interface OutreachInput {
   term: string;
   companies: string[];
   count: number;
+  // Which outreach vertical the presets + prompt priorities come from.
+  // Defaults to 'ai-ml' when omitted (see lib/verticals.ts).
+  vertical?: import('./verticals').VerticalId;
   // Optional per-request keys pasted into the UI. When absent the route falls
   // back to the server environment (OPENROUTER_API_KEY / APIFY_API_TOKEN).
   openrouterKey?: string;

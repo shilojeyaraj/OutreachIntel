@@ -7,6 +7,9 @@
  * of alumni, recruiters, and engineers.
  */
 
+import { getVertical } from './verticals';
+import type { VerticalId } from './verticals';
+
 const APIFY_ACTOR = 'apify~google-search-scraper';
 
 export interface SearchHit {
@@ -20,19 +23,25 @@ export interface SearchOptions {
   background: string;
   companies: string[];
   roleType: string;
+  vertical?: VerticalId;
   resultsPerCompany?: number;
   timeoutMs?: number;
   /** Apify token; falls back to APIFY_API_TOKEN when omitted. */
   token?: string;
 }
 
-function buildQuery(company: string, background: string, roleType: string): string {
+function buildQuery(
+  company: string,
+  background: string,
+  roleType: string,
+  verticalRoleHint: string,
+): string {
   const cleanCompany = company.replace(/\s*\/\s*/g, ' OR ');
   const universityMatch = background.match(/University of (\w+)/i);
   const university = universityMatch ? universityMatch[0] : 'University of Waterloo';
   const roleHint = roleType.toLowerCase().includes('research')
     ? 'research scientist OR applied scientist OR recruiter'
-    : 'engineer OR recruiter OR intern';
+    : verticalRoleHint;
 
   return `site:linkedin.com/in (${cleanCompany}) (${university} OR alumni OR ${roleHint})`;
 }
@@ -46,7 +55,10 @@ export async function searchLinkedInTargets(opts: SearchOptions): Promise<Search
   const resultsPerCompany = opts.resultsPerCompany ?? 8;
   const timeoutMs = opts.timeoutMs ?? 45_000;
 
-  const queries = opts.companies.map((c) => buildQuery(c, opts.background, opts.roleType));
+  const verticalRoleHint = getVertical(opts.vertical).searchRoleHint;
+  const queries = opts.companies.map((c) =>
+    buildQuery(c, opts.background, opts.roleType, verticalRoleHint),
+  );
 
   const url = `https://api.apify.com/v2/acts/${APIFY_ACTOR}/run-sync-get-dataset-items?token=${encodeURIComponent(
     token,

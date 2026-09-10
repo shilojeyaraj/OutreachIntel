@@ -1,4 +1,5 @@
 import type { OutreachInput } from './types';
+import { getVertical } from './verticals';
 
 const GOAL_MAP: Record<OutreachInput['goal'], string> = {
   referral: 'get a referral to apply for an internship',
@@ -13,6 +14,8 @@ export interface PromptOptions {
 
 export function buildPrompt(input: OutreachInput, opts: PromptOptions = {}): string {
   const count = input.count;
+  const vertical = getVertical(input.vertical);
+  const prioritiesBlock = vertical.promptPriorities.map((p, i) => `${i + 1}. ${p}`).join('\n');
   const groundingBlock = opts.searchResults
     ? `\nLIVE LINKEDIN SEARCH RESULTS — use these REAL people. Do not invent names. Pick the ${count} best matches from this list.\n\n${opts.searchResults}\n`
     : '';
@@ -40,10 +43,7 @@ Rules:
 - strategy: 2-3 sentence overall outreach strategy tailored to this student
 
 Prioritize in this order:
-1. UWaterloo / Canadian university alumni at the target company (highest response rate)
-2. Former interns who went full-time 1-4 years ago (they remember recruiting)
-3. University recruiters / intern program managers
-4. MLEs or SWEs on relevant teams (AI infra, LLM, agents, applied research)
+${prioritiesBlock}
 
 CRITICAL — every string value in the JSON must contain ZERO apostrophes and ZERO quotation marks.
 Write "I am" not "I'm". Write "I have" not "I've". Write "do not" not "don't". Write "would not" not "wouldn't".

@@ -44,4 +44,16 @@ describe('buildPrompt', () => {
     expect(ungrounded).not.toContain('LIVE LINKEDIN SEARCH RESULTS');
     expect(ungrounded).toContain('empty string');
   });
+
+  it('defaults to the AI/ML priority block when no vertical is given', () => {
+    const out = buildPrompt(BASE_INPUT);
+    expect(out).toContain('MLEs or SWEs on relevant teams');
+    expect(out).not.toContain('Health-tech founders');
+  });
+
+  it('swaps in the health-tech priority block when vertical is health-tech', () => {
+    const out = buildPrompt({ ...BASE_INPUT, vertical: 'health-tech' });
+    expect(out).toContain('Health-tech founders and early employees');
+    expect(out).not.toContain('MLEs or SWEs on relevant teams');
+  });
 });

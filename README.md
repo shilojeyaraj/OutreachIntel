@@ -13,6 +13,13 @@ Two integrations make the output non-generic:
 - **Apify Google Search Scraper** runs one `site:linkedin.com/in` query per target company and feeds the real hits to the LLM, so it picks actual people instead of inventing names.
 - **OpenRouter** acts as the model gateway, defaulting to `openai/gpt-4o` (swap via `OPENROUTER_MODEL`).
 
+### Verticals
+
+A toggle in the header switches the outreach vertical. Each vertical swaps the company/role presets, the Apify search keywords, and the "who to prioritize" block in the prompt — the engine itself is vertical-agnostic. Configs live in [`lib/verticals.ts`](./lib/verticals.ts); add one by extending `VERTICALS`.
+
+- **AI / ML** (default) — AI labs, ML/SWE intern roles, prioritizes alumni + former interns + MLEs.
+- **Health tech** — digital-health companies (Epic, Verily, Tempus, Abridge…), PM / APM / founder roles, prioritizes health-tech founders, PMs who broke in non-traditionally, and clinicians who moved into product.
+
 ## Stack
 
 - Next.js 14 (App Router)
