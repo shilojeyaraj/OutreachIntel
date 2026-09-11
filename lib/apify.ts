@@ -145,9 +145,11 @@ export interface HarvestOptions {
   token?: string;
   resultsPerPage?: number;
   maxPagesPerQuery?: number;
-  /** Queries per Apify run — runs are sequential. */
+  /** Queries per Apify run. */
   batchSize?: number;
   timeoutMsPerBatch?: number;
+  /** How many Apify batch runs to fire at once. */
+  concurrency?: number;
 }
 
 const TITLE_TAIL_RE =
@@ -226,68 +228,99 @@ export async function harvestProfiles(opts: HarvestOptions): Promise<HarvestedPr
   const maxPagesPerQuery = opts.maxPagesPerQuery ?? 1;
   const batchSize = opts.batchSize ?? 20;
   const timeoutMs = opts.timeoutMsPerBatch ?? 90_000;
+  const concurrency = opts.concurrency ?? 4;
 
   const byUrl = new Map<string, HarvestedProfile>();
+  const batches = chunk(opts.queries, batchSize);
+  const errors: string[] = [];
 
-  for (const batch of chunk(opts.queries, batchSize)) {
+  async function runBatch(batch: HarvestQuery[]): Promise<void> {
     const url = `https://api.apify.com/v2/acts/${APIFY_ACTOR}/run-sync-get-dataset-items?token=${encodeURIComponent(
       token,
     )}&timeout=${Math.floor(timeoutMs / 1000)}`;
 
     const controller = new AbortController();
     const timer = setTimeout(() => controller.abort(), timeoutMs);
-    let res: Response;
     try {
-      res = await fetch(url, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        signal: controller.signal,
-        body: JSON.stringify({
-          queries: batch.map((b) => b.q).join('\n'),
-          resultsPerPage,
-          maxPagesPerQuery,
-          countryCode: 'us',
-          languageCode: 'en',
-          mobileResults: false,
-          saveHtml: false,
-          saveHtmlToKeyValueStore: false,
-          includeUnfilteredResults: false,
-        }),
+      let res: Response;
+      try {
+        res = await fetch(url, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          signal: controller.signal,
+          body: JSON.stringify({
+            queries: batch.map((b) => b.q).join('\n'),
+            resultsPerPage,
+            maxPagesPerQuery,
+            countryCode: 'us',
+            languageCode: 'en',
+            mobileResults: false,
+            saveHtml: false,
+            saveHtmlToKeyValueStore: false,
+            includeUnfilteredResults: false,
+          }),
+        });
+      } catch (err) {
+        const msg = err instanceof Error ? err.message : 'Unknown network error';
+        throw new Error(`batch of ${batch.length} queries timed out or failed: ${msg}`);
+      }
+
+      if (!res.ok) {
+        const errText = await res.text().catch(() => '');
+        throw new Error(`Apify returned ${res.status}: ${errText.slice(0, 300)}`);
+      }
+
+      const items = (await res.json()) as unknown;
+      if (!Array.isArray(items)) return;
+
+      items.forEach((item, idx) => {
+        if (!item || typeof item !== 'object') return;
+        const fallbackCompany = batch[idx]?.company ?? '';
+        const organic = Array.isArray((item as Record<string, unknown>).organicResults)
+          ? ((item as Record<string, unknown>).organicResults as unknown[])
+          : [];
+        for (const raw of organic) {
+          if (!raw || typeof raw !== 'object') continue;
+          const h = raw as Record<string, unknown>;
+          const profile = parseProfileFromHit(
+            {
+              title: typeof h.title === 'string' ? h.title : '',
+              url: typeof h.url === 'string' ? h.url : '',
+              description: typeof h.description === 'string' ? h.description : '',
+            },
+            fallbackCompany,
+          );
+          if (profile && !byUrl.has(profile.linkedin_url)) {
+            byUrl.set(profile.linkedin_url, profile);
+          }
+        }
       });
+    } catch (err) {
+      errors.push(err instanceof Error ? err.message : String(err));
     } finally {
       clearTimeout(timer);
     }
+  }
 
-    if (!res.ok) {
-      const errText = await res.text().catch(() => '');
-      throw new Error(`Apify returned ${res.status}: ${errText.slice(0, 300)}`);
+  // Run batches through a bounded worker pool instead of one-at-a-time, so a
+  // large query set (e.g. a wide vertical at a high requested count) doesn't
+  // rack up (batch count × per-batch timeout) of sequential wall-clock time
+  // and blow past the route's own request timeout.
+  let nextIndex = 0;
+  async function worker(): Promise<void> {
+    while (nextIndex < batches.length) {
+      const i = nextIndex++;
+      await runBatch(batches[i]);
     }
+  }
+  await Promise.all(
+    Array.from({ length: Math.min(concurrency, batches.length) }, () => worker()),
+  );
 
-    const items = (await res.json()) as unknown;
-    if (!Array.isArray(items)) continue;
-
-    items.forEach((item, idx) => {
-      if (!item || typeof item !== 'object') return;
-      const fallbackCompany = batch[idx]?.company ?? '';
-      const organic = Array.isArray((item as Record<string, unknown>).organicResults)
-        ? ((item as Record<string, unknown>).organicResults as unknown[])
-        : [];
-      for (const raw of organic) {
-        if (!raw || typeof raw !== 'object') continue;
-        const h = raw as Record<string, unknown>;
-        const profile = parseProfileFromHit(
-          {
-            title: typeof h.title === 'string' ? h.title : '',
-            url: typeof h.url === 'string' ? h.url : '',
-            description: typeof h.description === 'string' ? h.description : '',
-          },
-          fallbackCompany,
-        );
-        if (profile && !byUrl.has(profile.linkedin_url)) {
-          byUrl.set(profile.linkedin_url, profile);
-        }
-      }
-    });
+  // A single slow/failed batch shouldn't discard profiles every other batch
+  // already found — only bail out if nothing came back at all.
+  if (byUrl.size === 0 && errors.length > 0) {
+    throw new Error(errors[0]);
   }
 
   return [...byUrl.values()];
