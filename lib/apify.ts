@@ -220,8 +220,9 @@ function chunk<T>(arr: T[], size: number): T[][] {
 }
 
 export async function harvestProfiles(opts: HarvestOptions): Promise<HarvestedProfile[]> {
-  const token = opts.token ?? process.env.APIFY_API_TOKEN;
-  if (!token) throw new Error('APIFY_API_TOKEN is not set');
+  const tokenOrUndefined = opts.token ?? process.env.APIFY_API_TOKEN;
+  if (!tokenOrUndefined) throw new Error('APIFY_API_TOKEN is not set');
+  const token: string = tokenOrUndefined;
   if (opts.queries.length === 0) return [];
 
   const resultsPerPage = opts.resultsPerPage ?? 20;
